@@ -64,8 +64,11 @@ jobs:
         run: |
           if [ "$EVENT" = pull_request ]; then
             .github/scripts/check-commits.sh "$BASE..$HEAD"
-          elif [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+          elif [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             .github/scripts/check-commits.sh "$BEFORE..$GITHUB_SHA"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            # A force push replaced the previous head, so check the whole history.
+            .github/scripts/check-commits.sh "$GITHUB_SHA"
           else
             .github/scripts/check-commits.sh
           fi
