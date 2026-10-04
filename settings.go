@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,9 +30,13 @@ const SettingsFile = "taskroll.json"
 type Settings struct {
 	// Banner is the line under a generated file's heading that says it is
 	// generated. %s becomes the data file's name.
-	Banner string     `json:"banner,omitempty"`
-	Sizes  []SizeSpec `json:"sizes,omitempty"`
-	Epic   EpicSpec   `json:"epic"`
+	Banner string `json:"banner,omitempty"`
+	// BrowseURL is where this tracker directory can be read in a repository
+	// browser, such as https://github.com/org/repo/blob/main/docs/tasks.
+	// When set, every item has a link that lands on it, for docs to cite.
+	BrowseURL string     `json:"browse_url,omitempty"`
+	Sizes     []SizeSpec `json:"sizes,omitempty"`
+	Epic      EpicSpec   `json:"epic"`
 	// Collections are the kinds of entry kept one file per entry beside the
 	// epics, such as debt.
 	Collections []CollectionSpec `json:"collections,omitempty"`
@@ -122,6 +127,12 @@ func LoadSettings(trackerDir string) (Settings, error) {
 func (s Settings) Validate() error {
 	if strings.Count(s.Banner, "%s") != 1 || strings.ContainsAny(s.Banner, "\n\r") {
 		return fmt.Errorf("banner must be one line holding %%s once, for the data file's name")
+	}
+	if s.BrowseURL != "" {
+		u, err := url.Parse(s.BrowseURL)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("browse_url %q is not an http(s) address of the tracker directory", s.BrowseURL)
+		}
 	}
 	seen := map[string]bool{}
 	for _, z := range s.Sizes {

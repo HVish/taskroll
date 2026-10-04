@@ -70,6 +70,7 @@ A tracker with no `taskroll.json` gets the defaults, which `init` writes out in 
 
 ```json
 {
+  "browse_url": "https://github.com/acme/shop/blob/main/docs/tasks",
   "sizes": [{ "name": "1", "points": 1 }, { "name": "3", "points": 3 }, { "name": "8", "points": 8 }],
   "epic": {
     "legend": "> Sizes are story points.",
@@ -86,13 +87,25 @@ A tracker with no `taskroll.json` gets the defaults, which `init` writes out in 
 
 Each epic field becomes a flag (`--quarter Q3`) and each marker a switch (`--urgent`) on `add` and `edit`; each collection is filed with `taskroll new <type>` and its fields become flags too. A collection with a `series` numbers its entries (`TD-001`); one without names them by a slug from the title. The workflow is fixed (`todo`, `in_progress`, `in_review`, `done`, `dropped`): merging, velocity and every view depend on what the statuses mean.
 
+## Linking to items
+
+Every task line in a generated epic file carries an anchor named after its id, so `epics/epic-0-payments.md#pay-001` lands on that task in GitHub, GitLab or any browser of the repository. Set `browse_url` in `taskroll.json` to where the tracker directory is browsable, and every item gets a permanent link for docs, issues and chat:
+
+```sh
+taskroll show PAY-001
+# ...
+# link:       https://github.com/acme/shop/blob/main/docs/tasks/epics/epic-0-payments.md#pay-001
+```
+
+Entries in a collection link to their own file. `show --json` and `list --json` carry the link as `url`, and the web UI's copy-link button copies it. Ids are never reused, so a link keeps pointing at the same item for good. The demo sets `browse_url`, so its links open the demo's files in this repository.
+
 ## The web UI
 
 ```sh
 taskroll serve             # prints http://127.0.0.1:PORT/?token=...; open that URL
 ```
 
-A board (drag a card to change its status) and a filterable list, with each item's details, comments and status in a side panel, and a form for new tasks. Every item has its own address, `/items/PAY-002`, so a link opens it directly; the copy-link button in the panel gives you one. It writes through the same locked store as the commands, so the generated files stay current, and it follows your system's light or dark setting.
+A board (drag a card to change its status; the Done column shows the last 14 days unless you ask for all) and a filterable list, with each item's details, comments and status in a side panel, and a form for new tasks. Every item has its own address on the local server, `/items/PAY-002`, and the panel's copy-link button gives you the item's permanent link (see [Linking to items](#linking-to-items)). Opening the local server without its session shows a page that says how to start one. It writes through the same locked store as the commands, so the generated files stay current, and it follows your system's light or dark setting.
 
 It is for one person on their own machine: it listens on 127.0.0.1 only, needs the per-session token in the printed URL, refuses other hosts and origins, and runs under a strict Content-Security-Policy with no inline script (the one inline style its components need is admitted by a per-page nonce).
 

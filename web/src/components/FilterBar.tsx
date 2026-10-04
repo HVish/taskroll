@@ -39,7 +39,7 @@ export function FilterBar({ meta, filters, onChange }: { meta: Meta; filters: Fi
           <Checkbox id="f-blocked" checked={filters.blocked} onCheckedChange={(v) => set("blocked", v === true)} /> Blocked
         </label>
         <label htmlFor="f-show-done" className="flex items-center gap-2">
-          <Checkbox id="f-show-done" checked={filters.all} onCheckedChange={(v) => set("all", v === true)} /> Show done
+          <Checkbox id="f-show-done" checked={filters.all} onCheckedChange={(v) => set("all", v === true)} /> Show all done
         </label>
       </div>
     </div>

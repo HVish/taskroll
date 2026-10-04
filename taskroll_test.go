@@ -58,7 +58,7 @@ func TestRenderEpic(t *testing.T) {
 			{ID: "RP-003", Type: TypeTask, Status: StatusDone, Title: "Two.", Size: "M", Done: "2026-01-02"},
 		},
 	}
-	want := "# EPIC 3: Reporting\n\n> Sizing legend\n\nIntro.\n\n- [ ] **RP-001** - One. `S`\n- [x] **RP-003** - Two. `M` · Done: 2026-01-02\n\n## Not in this epic\n"
+	want := "# EPIC 3: Reporting\n\n> Sizing legend\n\nIntro.\n\n- [ ] <a id=\"rp-001\"></a>**RP-001** - One. `S`\n- [x] <a id=\"rp-003\"></a>**RP-003** - Two. `M` · Done: 2026-01-02\n\n## Not in this epic\n"
 	if got := md.RenderEpic(f); got != want {
 		t.Fatalf("have %q\nwant %q", got, want)
 	}

@@ -35,6 +35,7 @@ export interface Row {
   blocked_by?: string[];
   conditions?: string[];
   dependents?: string[];
+  url?: string;
 }
 
 export interface EpicSummary {

@@ -96,7 +96,7 @@ func listCmd() *cobra.Command {
 			if asJSON {
 				rows := make([]listRow, 0, len(items))
 				for _, it := range items {
-					rows = append(rows, rowFor(x, it))
+					rows = append(rows, rowFor(p, x, it))
 				}
 				return printJSON(o, rows)
 			}
@@ -137,11 +137,12 @@ type listRow struct {
 	BlockedBy  []string `json:"blocked_by,omitempty"`
 	Conditions []string `json:"conditions,omitempty"`
 	Dependents []string `json:"dependents,omitempty"`
+	URL        string   `json:"url,omitempty"`
 }
 
-func rowFor(x *taskroll.Index, it taskroll.Item) listRow {
+func rowFor(p *taskroll.Project, x *taskroll.Index, it taskroll.Item) listRow {
 	ids, prose := x.Blockers(it)
-	r := listRow{Item: it, Epic: x.EpicOf(it.ID), Ready: x.Ready(it), Dependents: x.Dependents(it.ID)}
+	r := listRow{Item: it, Epic: x.EpicOf(it.ID), Ready: x.Ready(it), Dependents: x.Dependents(it.ID), URL: p.URL(x, it)}
 	if it.Open() {
 		r.BlockedBy, r.Conditions = ids, prose
 	}
@@ -167,7 +168,7 @@ func showCmd() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("no item %s", args[0])
 			}
-			r := rowFor(x, it)
+			r := rowFor(p, x, it)
 			o := out{cmd.OutOrStdout()}
 			if asJSON {
 				return printJSON(o, r)
@@ -198,6 +199,7 @@ func showCmd() *cobra.Command {
 			for _, n := range it.Notes {
 				kv("note", n)
 			}
+			kv("link", r.URL)
 			if it.Description != "" {
 				o.printf("\n%s\n", it.Description)
 			}

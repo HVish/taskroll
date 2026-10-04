@@ -1,29 +1,82 @@
 {
+  "browse_url": "https://github.com/hvish/taskroll/blob/main/examples/demo/docs/tasks",
   "sizes": [
-    { "name": "S", "points": 1 },
-    { "name": "M", "points": 3 },
-    { "name": "L", "points": 5 }
+    {
+      "name": "S",
+      "points": 1
+    },
+    {
+      "name": "M",
+      "points": 3
+    },
+    {
+      "name": "L",
+      "points": 5
+    }
   ],
   "epic": {
     "legend": "> Sizes: S is about a day, M two to three days, L a week. A blocker holds up the tasks that depend on it.",
-    "fields": [{ "key": "quarter", "label": "Quarter", "pattern": "^Q[1-4]$" }],
-    "markers": [{ "label": "urgent", "marker": "Urgent" }]
+    "fields": [
+      {
+        "key": "quarter",
+        "label": "Quarter",
+        "pattern": "^Q[1-4]$"
+      }
+    ],
+    "markers": [
+      {
+        "label": "urgent",
+        "marker": "Urgent"
+      }
+    ]
   },
   "collections": [
     {
       "dir": "debt",
       "type": "debt",
       "series": "TD",
-      "keys": ["id", "title", "type", "status", "area", "effort", "opened", "closed"],
-      "required": ["area"],
-      "values": { "area": ["checkout", "catalog", "platform"] }
+      "keys": [
+        "id",
+        "title",
+        "type",
+        "status",
+        "area",
+        "effort",
+        "opened",
+        "closed"
+      ],
+      "required": [
+        "area"
+      ],
+      "values": {
+        "area": [
+          "checkout",
+          "catalog",
+          "platform"
+        ]
+      }
     },
     {
       "dir": "ideas",
       "type": "opportunity",
-      "keys": ["title", "type", "status", "source", "opened", "closed"],
-      "required": ["source"],
-      "values": { "source": ["customer", "team", "support"] }
+      "keys": [
+        "title",
+        "type",
+        "status",
+        "source",
+        "opened",
+        "closed"
+      ],
+      "required": [
+        "source"
+      ],
+      "values": {
+        "source": [
+          "customer",
+          "team",
+          "support"
+        ]
+      }
     }
   ]
 }

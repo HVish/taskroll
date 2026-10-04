@@ -61,7 +61,7 @@ func TestProjectDrivenBySettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "# EPIC 0: Growth\n" + strings.ReplaceAll(DefaultBanner, "%s", id+".jsonl") + "\n\nSizes: XS or XL.\n\n- [ ] **G-001** - Referral link `XL` · Quarter: Q4 · Urgent\n"
+	want := "# EPIC 0: Growth\n" + strings.ReplaceAll(DefaultBanner, "%s", id+".jsonl") + "\n\nSizes: XS or XL.\n\n- [ ] <a id=\"g-001\"></a>**G-001** - Referral link `XL` · Quarter: Q4 · Urgent\n"
 	if string(raw) != want {
 		t.Fatalf("got:\n%q\nwant:\n%q", raw, want)
 	}
@@ -126,5 +126,25 @@ func TestSettingsAreValidated(t *testing.T) {
 		if _, err := LoadSettings(dir); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+func TestBrowseURL(t *testing.T) {
+	for _, bad := range []string{"ftp://example.com/tasks", "docs/tasks", "https://example.com/tasks?ref=main", "https:///tasks"} {
+		if err := (Settings{Banner: DefaultBanner, BrowseURL: bad}).Validate(); err == nil {
+			t.Errorf("browse_url %q accepted", bad)
+		}
+	}
+	if err := (Settings{Banner: DefaultBanner, BrowseURL: "https://github.com/o/r/blob/main/docs/tasks/"}).Validate(); err != nil {
+		t.Error(err)
+	}
+	p := &Project{Settings: Settings{BrowseURL: "https://example.com/r/docs/tasks/"}}
+	x := NewIndex([]*File{{Epic: Item{ID: "epic-0-pay", Type: TypeEpic}, Items: []Item{{ID: "PAY-012.1", Type: TypeTask}}}}, nil)
+	it, _ := x.Get("PAY-012.1")
+	if got := p.URL(x, it); got != "https://example.com/r/docs/tasks/epics/epic-0-pay.md#pay-012.1" {
+		t.Errorf("url: %s", got)
+	}
+	if got := (&Project{}).URL(x, it); got != "" {
+		t.Errorf("no browse_url, no link: %s", got)
 	}
 }

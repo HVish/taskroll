@@ -49,8 +49,15 @@ import (
 //go:embed all:dist
 var dist embed.FS
 
-// cookieName carries the session token after the first visit.
-const cookieName = "taskroll_session"
+// cookiePrefix names the cookie that carries the session token after the
+// first visit. Browsers do not separate cookies by port, so the name carries
+// the server's: two boards served at once keep a session each.
+const cookiePrefix = "taskroll_session_"
+
+func (s *Server) cookieName() string {
+	_, port, _ := net.SplitHostPort(s.host)
+	return cookiePrefix + port
+}
 
 // csp is the policy for every response; the page adds its style nonce.
 const csp = "default-src 'none'; script-src 'self'; style-src 'self'%s; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
@@ -148,12 +155,16 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
-			http.SetCookie(w, &http.Cookie{Name: cookieName, Value: s.token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
+			http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: s.token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 			return
 		}
-		c, err := r.Cookie(cookieName)
+		c, err := r.Cookie(s.cookieName())
 		if err != nil || !s.valid(c.Value) {
+			if r.Method == http.MethodGet && isPage(r.URL.Path) {
+				noSession(w)
+				return
+			}
 			http.Error(w, "forbidden: open the URL the serve command printed", http.StatusForbidden)
 			return
 		}
@@ -170,6 +181,39 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// noSessionPage answers a person who follows a link to the board, or to an
+// item, without the session the printed URL starts: a stale tab, a link from
+// a doc, a server restarted since. It names no item and carries no data.
+const noSessionPage = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>taskroll: open the printed link</title>
+<style nonce="%s">
+:root{color-scheme:light dark;--fg:#171717;--muted:#525252;--bg:#fafafa;--card:#fff;--line:#e5e5e5}
+@media (prefers-color-scheme:dark){:root{--fg:#f5f5f5;--muted:#a3a3a3;--bg:#0a0a0a;--card:#171717;--line:#262626}}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,sans-serif;padding:16px}
+main{max-width:34rem;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px 32px}
+h1{font-size:18px;margin:0 0 8px}p{margin:8px 0;color:var(--muted)}
+code{font:13px ui-monospace,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 6px;color:var(--fg)}
+</style></head><body><main>
+<h1>This taskroll session has ended, or has not started</h1>
+<p>The local board only opens through the link <code>taskroll serve</code> prints, which carries a one-time token. Each run prints a new one.</p>
+<p>Run <code>taskroll serve</code> in the repository and open the link it prints. To link to an item from a document, set <code>browse_url</code> in the tracker's settings and use the link <code>taskroll show</code> prints.</p>
+</main></body></html>
+`
+
+func noSession(w http.ResponseWriter) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		http.Error(w, "forbidden: open the URL the serve command printed", http.StatusForbidden)
+		return
+	}
+	nonce := base64.StdEncoding.EncodeToString(b)
+	w.Header().Set("Content-Security-Policy", fmt.Sprintf(csp, " 'nonce-"+nonce+"'"))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusForbidden)
+	_, _ = fmt.Fprintf(w, noSessionPage, nonce)
 }
 
 // isPage reports whether a path is one the application shell answers, so a
@@ -283,11 +327,12 @@ type Row struct {
 	BlockedBy  []string `json:"blocked_by,omitempty"`
 	Conditions []string `json:"conditions,omitempty"`
 	Dependents []string `json:"dependents,omitempty"`
+	URL        string   `json:"url,omitempty"` // where the item reads in a repository browser
 }
 
-func rowFor(x *taskroll.Index, it taskroll.Item) Row {
+func rowFor(p *taskroll.Project, x *taskroll.Index, it taskroll.Item) Row {
 	ids, prose := x.Blockers(it)
-	r := Row{Item: it, Epic: x.EpicOf(it.ID), Ready: x.Ready(it), Dependents: x.Dependents(it.ID)}
+	r := Row{Item: it, Epic: x.EpicOf(it.ID), Ready: x.Ready(it), Dependents: x.Dependents(it.ID), URL: p.URL(x, it)}
 	if it.Open() {
 		r.BlockedBy, r.Conditions = ids, prose
 	}
@@ -306,7 +351,7 @@ func (s *Server) index() (*taskroll.Project, *taskroll.Index, error) {
 // items lists with the CLI's filters: type, status, epic, label, size and
 // text repeat or take commas; ready, blocked and all are flags.
 func (s *Server) items(w http.ResponseWriter, r *http.Request) {
-	_, x, err := s.index()
+	p, x, err := s.index()
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err)
 		return
@@ -335,13 +380,13 @@ func (s *Server) items(w http.ResponseWriter, r *http.Request) {
 	}
 	rows := []Row{}
 	for _, it := range x.List(f) {
-		rows = append(rows, rowFor(x, it))
+		rows = append(rows, rowFor(p, x, it))
 	}
 	writeJSON(w, http.StatusOK, rows)
 }
 
 func (s *Server) item(w http.ResponseWriter, r *http.Request) {
-	_, x, err := s.index()
+	p, x, err := s.index()
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err)
 		return
@@ -351,7 +396,7 @@ func (s *Server) item(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, fmt.Errorf("no item %s", r.PathValue("id")))
 		return
 	}
-	writeJSON(w, http.StatusOK, rowFor(x, it))
+	writeJSON(w, http.StatusOK, rowFor(p, x, it))
 }
 
 // writeResult answers a write: the record as it now reads, or why not.
@@ -365,12 +410,12 @@ func (s *Server) writeResult(w http.ResponseWriter, it taskroll.Item, err error)
 		fail(w, status, err)
 		return
 	}
-	_, x, err := s.index()
+	p, x, err := s.index()
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rowFor(x, it))
+	writeJSON(w, http.StatusOK, rowFor(p, x, it))
 }
 
 func (s *Server) setStatus(w http.ResponseWriter, r *http.Request) {

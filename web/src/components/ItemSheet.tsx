@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, Link2 } from "lucide-react";
+import { ChevronDown, ExternalLink, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ import { ItemBadges } from "./ItemBadges";
 interface Props {
   id: string | null;
   statuses: Status[];
+  fieldLabels: Record<string, string>;
   version: number; // bumps after any write or poll, so an open item reloads
   onOpen: (id: string) => void;
   onClose: () => void;
@@ -54,7 +55,7 @@ function stamp(at?: string, by?: string) {
   return [when, by && "by " + by].filter(Boolean).join(" ");
 }
 
-export function ItemSheet({ id, statuses, version, onOpen, onClose, onChanged, onError }: Props) {
+export function ItemSheet({ id, statuses, fieldLabels, version, onOpen, onClose, onChanged, onError }: Props) {
   const [row, setRow] = useState<Row | null>(null);
   const [missing, setMissing] = useState<string | null>(null);
   const [comment, setComment] = useState("");
@@ -112,11 +113,13 @@ export function ItemSheet({ id, statuses, version, onOpen, onClose, onChanged, o
     }
   };
 
+  // The repository link is the one to put in a document: it outlives this
+  // session. Without browse_url, the local address is all there is.
   const copyLink = async () => {
     if (!row) return;
     try {
-      await navigator.clipboard.writeText(window.location.origin + "/items/" + encodeURIComponent(row.id));
-      onChanged("Link copied");
+      await navigator.clipboard.writeText(row.url ?? window.location.origin + "/items/" + encodeURIComponent(row.id));
+      onChanged(row.url ? "Link copied" : "Local link copied; set browse_url for one that works in docs");
     } catch {
       onError("Could not copy the link");
     }
@@ -141,6 +144,13 @@ export function ItemSheet({ id, statuses, version, onOpen, onClose, onChanged, o
                 <Button variant="ghost" size="icon-xs" onClick={copyLink} aria-label="Copy link to this item" title="Copy link">
                   <Link2 />
                 </Button>
+                {row.url && (
+                  <Button variant="ghost" size="icon-xs" asChild>
+                    <a href={row.url} target="_blank" rel="noopener noreferrer" aria-label="Open in the repository" title="Open in the repository">
+                      <ExternalLink />
+                    </a>
+                  </Button>
+                )}
               </div>
               <SheetTitle className="text-lg leading-snug">{row.title}</SheetTitle>
               <SheetDescription className="sr-only">Details, status and comments for {row.id}</SheetDescription>
@@ -184,7 +194,7 @@ export function ItemSheet({ id, statuses, version, onOpen, onClose, onChanged, o
                 {row.size && <Field label="Size">{row.size + (row.size_note ?? "")}</Field>}
                 {row.done && <Field label="Done">{row.done}</Field>}
                 {Object.entries(row.fields ?? {}).map(([k, v]) => (
-                  <Field key={k} label={k}>
+                  <Field key={k} label={fieldLabels[k] ?? k}>
                     {v}
                   </Field>
                 ))}

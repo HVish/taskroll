@@ -61,11 +61,24 @@ func (md Markdown) RenderEpic(f *File) string {
 			// record stays in the JSONL, which keeps its ID spent.
 			continue
 		}
-		b.WriteString(md.RenderLine(it))
+		b.WriteString(anchored(md.RenderLine(it), it.ID))
 		b.WriteString("\n")
 	}
 	b.WriteString(f.Epic.Outro)
 	return b.String()
+}
+
+// Anchor is the fragment that names an item's line in its epic file, so a
+// link such as epics/epic-0-payments.md#pay-001 lands on the task.
+func Anchor(id string) string { return strings.ToLower(id) }
+
+// anchored puts an item's anchor after the checkbox of its line, where a
+// repository browser scrolls to the start of the task even when it wraps.
+func anchored(line, id string) string {
+	if box, rest, ok := strings.Cut(line, "] "); ok {
+		return box + "] " + `<a id="` + Anchor(id) + `"></a>` + rest
+	}
+	return line
 }
 
 // RenderLine renders one item as its task line.

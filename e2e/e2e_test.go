@@ -216,7 +216,7 @@ func TestFromScratch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want(t, string(md), "- [x] **PAY-001** - Card checkout `M` · Done: 2026-09-01", "- [ ] **PAY-002** - Refunds and voids `S`")
+	want(t, string(md), "- [x] <a id=\"pay-001\"></a>**PAY-001** - Card checkout `M` · Done: 2026-09-01", "- [ ] <a id=\"pay-002\"></a>**PAY-002** - Refunds and voids `S`")
 
 	// A hand edit to a generated file is caught by the gate.
 	if err := os.WriteFile(filepath.Join(r.dir, "docs", "tasks", "epics", "epic-0-payments.md"), append(md, "edited by hand\n"...), 0o644); err != nil {
@@ -244,6 +244,22 @@ func TestDemoReads(t *testing.T) {
 	want(t, r.tr("list", "--type", "opportunity"), "gift-cards")
 	want(t, r.tr("velocity", "--weeks", "8"), "cycle time: median")
 	want(t, r.tr("burndown"), "8 of 18 complete")
+
+	// With browse_url set, every item has a link that lands on it.
+	base := "https://github.com/hvish/taskroll/blob/main/examples/demo/docs/tasks"
+	want(t, r.tr("show", "CO-003"), "link:       "+base+"/epics/epic-0-checkout.md#co-003")
+	want(t, r.tr("show", "TD-001"), base+"/debt/TD-001.md")
+	var shown struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(r.tr("show", "CAT-003", "--json")), &shown); err != nil || shown.URL != base+"/epics/epic-1-catalog.md#cat-003" {
+		t.Errorf("show --json url: %q %v", shown.URL, err)
+	}
+	md, err := os.ReadFile(filepath.Join(r.dir, "docs", "tasks", "epics", "epic-1-catalog.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want(t, string(md), `- [ ] <a id="cat-003"></a>**CAT-003** - Full-text search`)
 }
 
 func TestDemoWritesAndMerges(t *testing.T) {

@@ -51,7 +51,7 @@ func (s *Server) do(t *testing.T, r req) *httptest.ResponseRecorder {
 		hr.Host = r.host
 	}
 	if r.cookie {
-		hr.AddCookie(&http.Cookie{Name: cookieName, Value: s.token})
+		hr.AddCookie(&http.Cookie{Name: s.cookieName(), Value: s.token})
 	}
 	if r.header {
 		hr.Header.Set("X-Taskroll-Token", s.token)
@@ -93,6 +93,18 @@ func TestGuards(t *testing.T) {
 		}
 	}
 
+	// A person following a link without a session gets a page that says what
+	// to do, still a refusal, with nothing of the tracker in it.
+	for _, path := range []string{"/", "/items/D-001"} {
+		w := s.do(t, req{method: "GET", path: path})
+		if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "taskroll serve") || strings.Contains(w.Body.String(), "D-001") {
+			t.Fatalf("no session at %s: %d\n%s", path, w.Code, w.Body.String())
+		}
+		if csp := w.Header().Get("Content-Security-Policy"); strings.Contains(csp, "unsafe-inline") || !strings.Contains(csp, "'nonce-") {
+			t.Fatalf("no-session csp: %s", csp)
+		}
+	}
+
 	// The landing URL sets a strict, script-proof cookie and leaves the
 	// token out of the address bar.
 	w := s.do(t, req{method: "GET", path: "/?token=" + s.token})
@@ -101,6 +113,12 @@ func TestGuards(t *testing.T) {
 	}
 	if dl := s.do(t, req{method: "GET", path: "/items/D-001?token=" + s.token}); dl.Code != http.StatusSeeOther || dl.Header().Get("Location") != "/items/D-001" {
 		t.Fatalf("deep landing: %d %s", dl.Code, dl.Header().Get("Location"))
+	}
+	// Another board on another port has its own cookie, so neither
+	// overwrites the other's session.
+	other := &Server{token: s.token, host: "127.0.0.1:7789"}
+	if s.cookieName() == other.cookieName() {
+		t.Fatalf("two ports share the cookie %s", s.cookieName())
 	}
 	ck := w.Result().Cookies()
 	if len(ck) != 1 || !ck[0].HttpOnly || ck[0].SameSite != http.SameSiteStrictMode {
@@ -171,7 +189,7 @@ func TestReadsAndWrites(t *testing.T) {
 		t.Fatalf("D-002 comments: %+v", c)
 	}
 	md, err := os.ReadFile(filepath.Join(dir, "epics", "epic-1-demo.md"))
-	if err != nil || !strings.Contains(string(md), "- [x] **D-001**") || !strings.Contains(string(md), "**D-003** - third") {
+	if err != nil || !strings.Contains(string(md), "- [x] <a id=\"d-001\"></a>**D-001**") || !strings.Contains(string(md), "**D-003** - third") {
 		t.Fatalf("epic file not regenerated: %v\n%s", err, md)
 	}
 

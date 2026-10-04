@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Row, Status } from "@/lib/api";
-import { BOARD_STATUSES, STATUS_DOT, STATUS_NAMES } from "@/lib/status";
+import { BOARD_STATUSES, RECENT_DONE_DAYS, STATUS_DOT, STATUS_NAMES } from "@/lib/status";
 import { ItemBadges } from "./ItemBadges";
 
 interface Props {
   rows: Row[];
   showDone: boolean;
+  hiddenDone: number; // done items older than the recent window, left out
+  onShowAllDone: () => void;
   onOpen: (id: string) => void;
   onMove: (id: string, status: Status) => void;
 }
 
-export function Board({ rows, showDone, onOpen, onMove }: Props) {
+export function Board({ rows, showDone, hiddenDone, onShowAllDone, onOpen, onMove }: Props) {
   const [over, setOver] = useState<Status | null>(null);
-  const statuses = showDone ? BOARD_STATUSES : BOARD_STATUSES.filter((s) => s !== "done");
+  const statuses = BOARD_STATUSES;
   return (
     <div className="grid min-h-0 flex-1 auto-cols-[minmax(17rem,24rem)] grid-flow-col justify-start gap-4 overflow-x-auto pb-2">
       {statuses.map((status) => {
@@ -71,8 +73,17 @@ export function Board({ rows, showDone, onOpen, onMove }: Props) {
               ))}
               {items.length === 0 && (
                 <p className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
-                  Drop a card here
+                  {status === "done" && !showDone ? `Nothing done in the last ${RECENT_DONE_DAYS} days` : "Drop a card here"}
                 </p>
+              )}
+              {status === "done" && !showDone && hiddenDone > 0 && (
+                <button
+                  type="button"
+                  onClick={onShowAllDone}
+                  className="rounded-lg px-3 py-2 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  Showing the last {RECENT_DONE_DAYS} days · show {hiddenDone} older
+                </button>
               )}
             </div>
           </section>

@@ -84,6 +84,23 @@ func (p *Project) Load() (*Snapshot, error) {
 // EpicFileName is the name an epic renders under in epics/.
 func EpicFileName(f *File) string { return f.Epic.ID + ".md" }
 
+// URL is the link that lands on an item in a repository browser: its line in
+// the epic file, or its own file for an entry. It is empty when the settings
+// set no browse_url, or the item has no page.
+func (p *Project) URL(x *Index, it Item) string {
+	base := strings.TrimSuffix(p.Settings.BrowseURL, "/")
+	if base == "" {
+		return ""
+	}
+	if epic := x.EpicOf(it.ID); epic != "" {
+		return base + "/epics/" + epic + ".md#" + Anchor(it.ID)
+	}
+	if c, ok := p.Settings.Collection(it.Type); ok {
+		return base + "/" + EntryRel(c, it)
+	}
+	return ""
+}
+
 // LiveEpics are the epics that are not tombstones, in file-name order,
 // which is the order views list them in.
 func (s *Snapshot) LiveEpics() []*File {

@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type Filters, type Meta, type Row, type Status } from "@/lib/api";
 import { useItemRoute } from "@/lib/route";
-import { STATUS_NAMES } from "@/lib/status";
+import { STATUS_NAMES, recentlyDone } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { Board } from "@/components/Board";
 import { FilterBar } from "@/components/FilterBar";
@@ -55,7 +55,9 @@ export function App() {
     const t = window.setTimeout(
       () => {
         api
-          .items(filters)
+          // The board always has a Done column, so it always asks for done
+          // work and trims it to the recent window itself.
+          .items(view === "board" ? { ...filters, all: true } : filters)
           .then((r) => live && setRows(r))
           .catch((e: Error) => live && say(e.message, true));
       },
@@ -65,7 +67,7 @@ export function App() {
       live = false;
       window.clearTimeout(t);
     };
-  }, [filters, version, say]);
+  }, [filters, version, view, say]);
 
   // The CLI or another agent may change the records at any time.
   useEffect(() => {
@@ -84,6 +86,11 @@ export function App() {
       /* storage unavailable: the choice lasts this visit only */
     }
   };
+
+  const boardRows =
+    rows && view === "board" ? rows.filter((r) => r.status !== "dropped" && (filters.all || r.status !== "done" || recentlyDone(r.done, r.closed_at))) : rows;
+  const hiddenDone =
+    rows && view === "board" && !filters.all ? rows.filter((r) => r.status === "done" && !recentlyDone(r.done, r.closed_at)).length : 0;
 
   const move = async (id: string, status: Status) => {
     try {
@@ -132,7 +139,7 @@ export function App() {
         {meta && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <FilterBar meta={meta} filters={filters} onChange={setFilters} />
-            {rows && <span className="text-xs text-muted-foreground tabular-nums">{rows.length} item(s)</span>}
+            {boardRows && <span className="text-xs text-muted-foreground tabular-nums">{boardRows.length} item(s)</span>}
           </div>
         )}
         {!rows ? (
@@ -142,7 +149,14 @@ export function App() {
             ))}
           </div>
         ) : view === "board" ? (
-          <Board rows={rows} showDone={filters.all} onOpen={openItem} onMove={move} />
+          <Board
+            rows={boardRows ?? []}
+            showDone={filters.all}
+            hiddenDone={hiddenDone}
+            onShowAllDone={() => setFilters({ ...filters, all: true })}
+            onOpen={openItem}
+            onMove={move}
+          />
         ) : (
           <ItemTable rows={rows} onOpen={openItem} />
         )}
@@ -166,6 +180,7 @@ export function App() {
       <ItemSheet
         id={itemId}
         statuses={meta?.statuses ?? []}
+        fieldLabels={Object.fromEntries((meta?.fields ?? []).map((f) => [f.key, f.label]))}
         version={version}
         onOpen={openItem}
         onClose={() => openItem(null)}
