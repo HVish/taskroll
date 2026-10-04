@@ -136,7 +136,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): building and testing (including the web 
 
 ## Releases
 
-Tags are `vX.Y.Z`; binaries are built with `go build -ldflags "-X main.version=vX.Y.Z" ./cmd/taskroll`. [CHANGELOG.md](CHANGELOG.md) records each release. 
+Tags are `vX.Y.Z`; binaries are built with `go build -ldflags "-X main.version=vX.Y.Z" ./cmd/taskroll`. [CHANGELOG.md](CHANGELOG.md) records each release. A change to the record format bumps `SchemaVersion` and the schema's `$id`; see Compatibility below.
+
 ## Compatibility
 
 Install taskroll once per machine and upgrade it whenever you like: a newer release never rewrites a tracker it did not change.
