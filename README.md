@@ -2,6 +2,8 @@
 
 A work tracker kept in git. Epics, tasks and entries are JSONL records in the repository; the markdown people read is generated from them; every change goes through the CLI, which validates it, stamps who made it and when, and regenerates the views under a lock. It is built for a team of people and AI agents working in one repository, often in parallel branches and worktrees.
 
+![The taskroll board, showing the demo project: To do, In progress, In review and Done columns of task cards with sizes, epics, labels and ready or blocked badges](docs/images/board.jpg)
+
 ## Try it
 
 The repository carries a sample project, a fictional storefront with three epics, work in every status, dependencies, comments, a debt list and some ideas:
