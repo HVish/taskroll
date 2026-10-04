@@ -1,0 +1,4 @@
+/taskroll
+/dist/
+*.test
+*.out

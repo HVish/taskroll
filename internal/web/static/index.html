@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="taskroll-token" content="{{TOKEN}}">
+<title>taskroll</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<header class="bar">
+  <h1>taskroll</h1>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-view="board" aria-selected="true">Board</button>
+    <button type="button" role="tab" data-view="list" aria-selected="false">List</button>
+  </nav>
+  <span class="who" id="who"></span>
+  <button type="button" class="primary" id="new-task">New task</button>
+</header>
+
+<section class="filters" aria-label="Filters">
+  <label>Epic <select id="f-epic"><option value="">All epics</option></select></label>
+  <label>Type <select id="f-type"><option value="">Any type</option></select></label>
+  <label>Label <select id="f-label"><option value="">Any label</option></select></label>
+  <label>Size <select id="f-size"><option value="">Any size</option></select></label>
+  <label class="grow">Search <input type="search" id="f-text" placeholder="id, title, notes"></label>
+  <label class="check"><input type="checkbox" id="f-ready"> Ready only</label>
+  <label class="check"><input type="checkbox" id="f-blocked"> Blocked only</label>
+  <label class="check"><input type="checkbox" id="f-done"> Show done</label>
+</section>
+
+<p class="status-line" id="status-line" role="status" aria-live="polite"></p>
+
+<main>
+  <section id="board" class="board" aria-label="Board"></section>
+  <section id="list" class="list" aria-label="List" hidden>
+    <table>
+      <thead><tr><th>ID</th><th>Status</th><th>Size</th><th>Epic</th><th>Title</th><th>Blocked by</th></tr></thead>
+      <tbody id="list-body"></tbody>
+    </table>
+  </section>
+</main>
+
+<aside id="detail" class="detail" hidden aria-label="Item">
+  <div class="detail-head">
+    <h2 id="d-title"></h2>
+    <button type="button" class="ghost" id="d-close" aria-label="Close">×</button>
+  </div>
+  <dl id="d-meta" class="meta"></dl>
+  <div class="actions" id="d-actions"></div>
+  <pre id="d-description" class="description"></pre>
+  <h3>Comments</h3>
+  <ol id="d-comments" class="comments"></ol>
+  <form id="d-comment-form" class="comment-form">
+    <textarea id="d-comment" rows="3" required placeholder="Add a comment (markdown)"></textarea>
+    <button type="submit" class="primary">Comment</button>
+  </form>
+</aside>
+
+<dialog id="task-dialog">
+  <form id="task-form" method="dialog">
+    <h2>New task</h2>
+    <label>Epic <select id="t-epic" required></select></label>
+    <label>Series <input id="t-series" required pattern="[A-Za-z]+" autocomplete="off"></label>
+    <label>Title <input id="t-title" required autocomplete="off"></label>
+    <label>Size <select id="t-size"><option value="">None</option></select></label>
+    <label>Depends on <input id="t-depends" placeholder="comma-separated ids or conditions" autocomplete="off"></label>
+    <div id="t-fields"></div>
+    <label class="check"><input type="checkbox" id="t-blocker"> Blocker</label>
+    <p class="error" id="t-error" role="alert"></p>
+    <div class="buttons">
+      <button type="button" class="ghost" id="t-cancel">Cancel</button>
+      <button type="submit" class="primary">Add task</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/hvish/taskroll/main/item.schema.json",
+  "title": "Tracker item, schema version 1",
+  "description": "One line of a tracker JSONL file. The first line of each file is the epic record; every other line is an item of that epic.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "title"],
+  "properties": {
+    "id": { "type": "string", "description": "PREFIX-NNN for numbered items; a lower-case slug for items that are deliberately unnumbered; epic-N-slug for epics, matching the file name.", "pattern": "^([A-Za-z]+-[0-9]{3}(\\.[0-9]+)?|[a-z0-9]+(-[a-z0-9]+)*)$" },
+    "type": { "enum": ["epic", "task", "bug", "debt", "opportunity", "watch"] },
+    "schema": { "type": "integer", "minimum": 1, "maximum": 1, "description": "Epic records only: the schema version the file is written in." },
+    "status": { "enum": ["todo", "in_progress", "in_review", "done", "dropped"], "description": "Required on every non-epic record." },
+    "title": { "type": "string", "minLength": 1, "pattern": "^[^\\n\\r]*$" },
+    "size": { "type": "string", "pattern": "^[A-Z0-9]{1,4}$", "description": "One of the sizes in the tracker's settings (taskroll.json); S, M and L by default." },
+    "size_note": { "type": "string", "pattern": "^[^\\n\\r]*$", "description": "Text rendered straight after the size, e.g. \" per card\"." },
+    "blocker": { "type": "boolean", "description": "Downstream work is blocked until this is done." },
+    "depends": { "$ref": "#/$defs/refs", "description": "Item IDs, or prose conditions only a person can clear." },
+    "closes": { "$ref": "#/$defs/refs", "description": "Epic-level items this one implements; both close together." },
+    "notes": { "$ref": "#/$defs/refs", "description": "Short free-text fields shown on the task line." },
+    "fields": { "type": "object", "description": "Project-defined fields, e.g. phase and track.", "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" }, "additionalProperties": { "type": "string", "pattern": "^[^\\n\\r]*$" } },
+    "labels": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" } },
+    "done": { "$ref": "#/$defs/day", "description": "The date the work shipped (the PR merge date); only when status is done." },
+    "created_at": { "type": "string", "format": "date-time", "description": "When the record was created, RFC 3339 UTC. Absent on records migrated from markdown." },
+    "created_by": { "type": "string", "description": "Who created the record: the tracker user from git config." },
+    "closed_at": { "type": "string", "format": "date-time", "description": "When the record reached done or dropped, RFC 3339 UTC. Distinct from done, which is the date the work shipped." },
+    "closed_by": { "type": "string" },
+    "intro": { "type": "string", "description": "Epic records: markdown before the task list, verbatim." },
+    "outro": { "type": "string", "description": "Epic records: markdown after the task list, verbatim." },
+    "archived": { "type": "string", "description": "Epic records: the release the epic was archived at." },
+    "archived_file": { "type": "string", "description": "Epic records: the quarterly archive file holding its tasks." },
+    "description": { "type": "string", "description": "Markdown." },
+    "comments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "body"],
+        "properties": {
+          "date": { "$ref": "#/$defs/day" },
+          "author": { "type": "string" },
+          "body": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "day": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "refs": { "type": "array", "items": { "type": "string", "minLength": 1, "pattern": "^(?!.* · )[^\\n\\r]+$" } }
+  }
+}
