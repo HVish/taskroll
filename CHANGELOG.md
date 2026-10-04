@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Trackers name their format: `taskroll.json` takes `"format"` (absent means 1, and `init` writes it), and `taskroll version` prints the newest format and record schema the binary supports.
+- An older binary that meets a newer format or record schema stops before parsing and prints the command that upgrades it, instead of failing on an unknown key. Any other unknown key in the settings, the config or the records now suggests an upgrade too.
+- Format 1 output is frozen in `testdata/format-1/` and checked on every build, so upgrading taskroll leaves existing trackers unchanged.
+
 ## v0.1.0 (2026-10-04)
 
 First public release. Record schema 1.

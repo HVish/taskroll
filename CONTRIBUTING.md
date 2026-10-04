@@ -13,6 +13,8 @@ golangci-lint run ./...
 
 The end-to-end suite builds the binary and drives it against a copy of `examples/demo`. If your change alters the generated markdown, regenerate the demo with `go run ../../cmd/taskroll index` inside `examples/demo` and commit the result.
 
+Releases keep rendering existing trackers byte for byte (see Compatibility in the README). `testdata/format-1/` is frozen and `TestFormat1RendersUnchanged` renders it with your build: never regenerate it. If your change has to alter what an existing tracker renders, or adds a key to `taskroll.json` or the records, it is a new format or record schema: bump `FormatVersion` or `SchemaVersion`, keep the old output for trackers on the old one, and add a `testdata/format-N/` fixture beside the old one.
+
 The web UI lives in `web/` (React, Tailwind CSS, shadcn/ui). Its build is committed in `internal/web/dist/` so that `go install` works without Node, and CI fails if the two disagree:
 
 ```sh

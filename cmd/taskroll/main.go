@@ -41,10 +41,10 @@ func main() {
 	root.AddCommand(cli.Commands(cli.Hooks{Invocation: "taskroll"})...)
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
-		Short: "Print the tracker version and the record schema it reads",
+		Short: "Print the tracker version and the newest format and record schema it reads",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "taskroll %s (record schema %d)\n", buildVersion(), taskroll.SchemaVersion)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "taskroll %s (format %d, record schema %d)\n", buildVersion(), taskroll.FormatVersion, taskroll.SchemaVersion)
 		},
 	})
 	if err := root.Execute(); err != nil {

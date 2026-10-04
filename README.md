@@ -136,7 +136,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): building and testing (including the web 
 
 ## Releases
 
-Tags are `vX.Y.Z`; binaries are built with `go build -ldflags "-X main.version=vX.Y.Z" ./cmd/taskroll`. [CHANGELOG.md](CHANGELOG.md) records each release. A change to the record format bumps `SchemaVersion` and the schema's `$id`; older binaries then refuse the files rather than drop fields they do not know.
+Tags are `vX.Y.Z`; binaries are built with `go build -ldflags "-X main.version=vX.Y.Z" ./cmd/taskroll`. [CHANGELOG.md](CHANGELOG.md) records each release. 
+## Compatibility
+
+Install taskroll once per machine and upgrade it whenever you like: a newer release never rewrites a tracker it did not change.
+
+- **The tracker names its format.** `taskroll.json` carries `"format"` (absent means 1), and each epic record carries the record schema it was written in. `taskroll version` prints the newest of each that the binary supports.
+- **Newer releases keep older output.** A release renders every format it supports exactly as that format always rendered, so after an upgrade `taskroll index --check` still passes and the next write changes only what it was asked to. A frozen fixture per format (`testdata/format-N/`) holds every release to this.
+- **Moving to a newer format is a deliberate step**, made in its own commit, never a side effect of a write.
+- **Older releases refuse newer trackers cleanly.** A binary that meets a newer format or record schema stops before touching anything and prints the command that upgrades it, rather than failing on a key it does not know or dropping it on the next write.
 
 ## License
 
