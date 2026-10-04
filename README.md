@@ -117,14 +117,7 @@ root.AddCommand(cli.Commands(cli.Hooks{
 
 ## Contributing
 
-The Go code needs only Go. The web UI is React, Tailwind CSS and shadcn/ui under `web/`; its build is committed in `internal/web/dist/` so that `go install` works without Node, and CI fails if the two disagree. After changing anything under `web/`:
-
-```sh
-cd web && pnpm install && pnpm build    # or pnpm watch while you work
-cd ../examples/demo && go run ../../cmd/taskroll serve
-```
-
-`go test ./...` includes an end-to-end suite (`e2e/`) that builds the binary and drives it against a copy of the demo: the commands, a merge of two branches through the merge driver, and the web server with its security checks. A change that alters the generated files must regenerate the demo (`taskroll index` in `examples/demo`), or the suite fails.
+See [CONTRIBUTING.md](CONTRIBUTING.md): building and testing (including the web UI and the end-to-end suite) and the commit conventions CI checks.
 
 ## Releases
 
