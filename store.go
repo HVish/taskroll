@@ -134,12 +134,17 @@ func Decode(name string, raw []byte) (*File, error) {
 		if conflictMarker.Match(text) {
 			return nil, fmt.Errorf("%s:%d: unresolved merge conflict; resolve it, or set up the record merge with `taskroll config merge-driver` and merge again", name, line)
 		}
+		// A newer record schema is reported before the strict decode, which
+		// would otherwise fail on whichever key the newer schema added.
+		var peek struct {
+			Type   string `json:"type"`
+			Schema int    `json:"schema"`
+		}
+		if json.Unmarshal(text, &peek) == nil && peek.Type == TypeEpic && peek.Schema > SchemaVersion {
+			return nil, &NewerError{Path: fmt.Sprintf("%s:%d", name, line), What: "record schema", Have: peek.Schema, Supported: SchemaVersion}
+		}
 		var it Item
-		dec := json.NewDecoder(bytes.NewReader(text))
-		// An unknown key is refused rather than dropped: the next write
-		// would otherwise delete it without anyone noticing.
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&it); err != nil {
+		if err := decodeStrict(text, &it); err != nil {
 			return nil, fmt.Errorf("%s:%d: %w", name, line, err)
 		}
 		if err := it.Validate(); err != nil {

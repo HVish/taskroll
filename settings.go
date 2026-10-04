@@ -1,7 +1,6 @@
 package taskroll
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -28,6 +27,9 @@ const SettingsFile = "taskroll.json"
 // and every view reads open and closed from it; a project-defined status
 // would mean something to none of them.
 type Settings struct {
+	// Format is the tracker format the directory is written in; see
+	// FormatVersion. Zero, a settings file without it, means 1.
+	Format int `json:"format,omitempty"`
 	// Banner is the line under a generated file's heading that says it is
 	// generated. %s becomes the data file's name.
 	Banner string `json:"banner,omitempty"`
@@ -80,6 +82,7 @@ const DefaultBanner = "<!-- Generated from ../data/%s. Change it with the tracke
 // S, M and L sizes, plain task lines, no collections.
 func DefaultSettings() Settings {
 	return Settings{
+		Format: FormatVersion,
 		Banner: DefaultBanner,
 		Sizes:  []SizeSpec{{"S", 1}, {"M", 2.5}, {"L", 4.5}},
 	}
@@ -103,13 +106,22 @@ func LoadSettings(trackerDir string) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
+	// The format is read on its own first: a newer format may carry keys
+	// this build would refuse, and the useful answer is to upgrade.
+	var peek struct {
+		Format int `json:"format"`
+	}
+	if json.Unmarshal(raw, &peek) == nil && peek.Format > FormatVersion {
+		return Settings{}, &NewerError{Path: path, What: "format", Have: peek.Format, Supported: FormatVersion}
+	}
 	var s Settings
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&s); err != nil {
+	if err := decodeStrict(raw, &s); err != nil {
 		return Settings{}, fmt.Errorf("%s: %w", path, err)
 	}
 	def := DefaultSettings()
+	if s.Format == 0 {
+		s.Format = 1
+	}
 	if s.Banner == "" {
 		s.Banner = def.Banner
 	}
@@ -125,6 +137,9 @@ func LoadSettings(trackerDir string) (Settings, error) {
 // Validate checks the settings are coherent: names are well-formed and
 // unique, and every collection is a type the records know.
 func (s Settings) Validate() error {
+	if s.Format < 0 || s.Format > FormatVersion {
+		return fmt.Errorf("format %d is not one this build supports (1 to %d)", s.Format, FormatVersion)
+	}
 	if strings.Count(s.Banner, "%s") != 1 || strings.ContainsAny(s.Banner, "\n\r") {
 		return fmt.Errorf("banner must be one line holding %%s once, for the data file's name")
 	}

@@ -290,9 +290,7 @@ func mergeItem(b, o, t Item) (Item, []string) {
 	}
 	raw, _ := json.Marshal(out)
 	var it Item
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&it); err != nil {
+	if err := decodeStrict(raw, &it); err != nil {
 		return o, append(conflicts, "merged record did not decode ("+err.Error()+"); kept ours")
 	}
 	if err := it.Validate(); err != nil {

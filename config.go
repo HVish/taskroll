@@ -35,9 +35,7 @@ func FindConfig(start string) (root string, cfg Config, err error) {
 	for {
 		raw, err := os.ReadFile(filepath.Join(dir, ConfigFile))
 		if err == nil {
-			dec := json.NewDecoder(bytes.NewReader(raw))
-			dec.DisallowUnknownFields()
-			if err := dec.Decode(&cfg); err != nil {
+			if err := decodeStrict(raw, &cfg); err != nil {
 				return "", cfg, fmt.Errorf("%s: %w", filepath.Join(dir, ConfigFile), err)
 			}
 			if err := cfg.validate(); err != nil {
