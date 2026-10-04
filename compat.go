@@ -35,7 +35,8 @@ func (e *NewerError) Error() string {
 
 // decodeStrict decodes one JSON value and refuses unknown keys, because the
 // next write would otherwise drop them. An unknown key is most often one a
-// newer taskroll added, so the error says how to upgrade.
+// newer taskroll added, so the error says how to upgrade. The match is on
+// encoding/json's message, which TestUnknownKeySuggestsAnUpgrade pins.
 func decodeStrict(raw []byte, v any) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
