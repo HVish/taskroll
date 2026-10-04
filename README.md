@@ -78,7 +78,9 @@ Each epic field becomes a flag (`--quarter Q3`) and each marker a switch (`--urg
 taskroll serve             # prints http://127.0.0.1:PORT/?token=...; open that URL
 ```
 
-A board (drag a card to change its status) and a filterable list, with an item's details, comments and a form for new tasks. It writes through the same locked store as the commands, so the generated files stay current. It is for one person on their own machine: it listens on 127.0.0.1 only, needs the per-session token in the printed URL, refuses other hosts and origins, and runs no inline script under a strict Content-Security-Policy.
+A board (drag a card to change its status) and a filterable list, with each item's details, comments and status in a side panel, and a form for new tasks. Every item has its own address, `/items/PAY-002`, so a link opens it directly; the copy-link button in the panel gives you one. It writes through the same locked store as the commands, so the generated files stay current, and it follows your system's light or dark setting.
+
+It is for one person on their own machine: it listens on 127.0.0.1 only, needs the per-session token in the printed URL, refuses other hosts and origins, and runs under a strict Content-Security-Policy with no inline script (the one inline style its components need is admitted by a per-page nonce).
 
 ## Working in parallel
 
@@ -97,6 +99,15 @@ root.AddCommand(cli.Commands(cli.Hooks{
 	Views:      []string{"INDEX.md"},
 	CheckViews: func(dir string) error { /* fail on a stale view */ },
 })...)
+```
+
+## Contributing
+
+The Go code needs only Go. The web UI is React, Tailwind CSS and shadcn/ui under `web/`; its build is committed in `internal/web/dist/` so that `go install` works without Node, and CI fails if the two disagree. After changing anything under `web/`:
+
+```sh
+cd web && pnpm install && pnpm build    # or pnpm watch while you work
+cd .. && go run ./cmd/taskroll serve
 ```
 
 ## Releases

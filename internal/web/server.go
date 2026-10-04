@@ -15,8 +15,10 @@
 //     Origin; a cross-site form cannot set the header, and a cross-site
 //     script cannot read the token or pass CORS, which is never answered.
 //   - The pages load no inline script under a strict Content-Security-Policy,
-//     and the client puts every string into the DOM as text, so a title
-//     holding markup renders as the characters it is.
+//     and React puts every string into the DOM as text, so a title holding
+//     markup renders as the characters it is. The one inline style the UI
+//     needs (Radix's scroll lock) is admitted by a per-page nonce, not by
+//     'unsafe-inline'.
 //
 // Every write goes through the core's Store, under the tracker lock, and
 // regenerates the views exactly as the CLI does.
@@ -24,9 +26,9 @@ package web
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -41,11 +43,17 @@ import (
 	"github.com/hvish/taskroll"
 )
 
-//go:embed static
-var static embed.FS
+// dist is the built UI (web/ in the repository, built with `pnpm build`);
+// it is committed so that `go install` ships it without Node.
+//
+//go:embed all:dist
+var dist embed.FS
 
 // cookieName carries the session token after the first visit.
 const cookieName = "taskroll_session"
+
+// csp is the policy for every response; the page adds its style nonce.
+const csp = "default-src 'none'; script-src 'self'; style-src 'self'%s; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // maxBody bounds a request body; the largest legitimate one is a comment.
 const maxBody = 64 << 10
@@ -98,9 +106,15 @@ func (s *Server) Serve(ln net.Listener) error {
 // Handler is the whole application, behind the guards.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	assets, _ := fs.Sub(static, "static")
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(assets)))
+	files, _ := fs.Sub(dist, "dist")
+	assets := http.FileServerFS(files)
+	mux.HandleFunc("GET /assets/", func(w http.ResponseWriter, r *http.Request) {
+		// Asset names carry a content hash, so a cached copy is never stale.
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		assets.ServeHTTP(w, r)
+	})
 	mux.HandleFunc("GET /{$}", s.page)
+	mux.HandleFunc("GET /items/{id}", s.page)
 	mux.HandleFunc("GET /api/meta", s.meta)
 	mux.HandleFunc("GET /api/items", s.items)
 	mux.HandleFunc("GET /api/items/{id}", s.item)
@@ -114,7 +128,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", fmt.Sprintf(csp, ""))
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
@@ -129,13 +143,13 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		// The landing URL carries the token once; it becomes a cookie and
 		// the browser is sent to a clean URL, so the token leaves the
 		// address bar and the history.
-		if t := r.URL.Query().Get("token"); t != "" && r.Method == http.MethodGet && r.URL.Path == "/" {
+		if t := r.URL.Query().Get("token"); t != "" && r.Method == http.MethodGet && isPage(r.URL.Path) {
 			if !s.valid(t) {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			http.SetCookie(w, &http.Cookie{Name: cookieName, Value: s.token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 			return
 		}
 		c, err := r.Cookie(cookieName)
@@ -158,38 +172,36 @@ func (s *Server) guard(next http.Handler) http.Handler {
 	})
 }
 
+// isPage reports whether a path is one the application shell answers, so a
+// printed or linked URL with the token lands where it points.
+func isPage(path string) bool {
+	return path == "/" || (strings.HasPrefix(path, "/items/") && !strings.Contains(path[len("/items/"):], "/"))
+}
+
 func (s *Server) valid(t string) bool {
 	return subtle.ConstantTimeCompare([]byte(t), []byte(s.token)) == 1
 }
 
-// page is the application shell. The token reaches the script through a
-// meta tag the script reads, never through inline script.
+// page is the application shell, for the root and for an item's own URL.
+// The token and a fresh style nonce reach the script through meta tags it
+// reads, never through inline script.
 func (s *Server) page(w http.ResponseWriter, _ *http.Request) {
-	raw, err := static.ReadFile("static/index.html")
+	raw, err := dist.ReadFile("dist/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	page := strings.Replace(string(raw), "{{TOKEN}}", s.token, 1)
-	// The asset URLs carry a hash of the build's assets, so a browser never
-	// pairs a new page with a script or stylesheet it cached from an old one.
-	page = strings.NewReplacer("/static/app.css", "/static/app.css?v="+assetVersion, "/static/app.js", "/static/app.js?v="+assetVersion).Replace(page)
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	nonce := base64.StdEncoding.EncodeToString(b)
+	page := strings.NewReplacer("{{TOKEN}}", s.token, "{{NONCE}}", nonce).Replace(string(raw))
+	w.Header().Set("Content-Security-Policy", fmt.Sprintf(csp, " 'nonce-"+nonce+"'"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(page))
 }
-
-// assetVersion is a hash of the embedded assets.
-var assetVersion = func() string {
-	h := sha256.New()
-	_ = fs.WalkDir(static, "static", func(path string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			raw, _ := static.ReadFile(path)
-			h.Write(raw)
-		}
-		return nil
-	})
-	return hex.EncodeToString(h.Sum(nil))[:12]
-}()
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

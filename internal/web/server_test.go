@@ -99,15 +99,31 @@ func TestGuards(t *testing.T) {
 	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
 		t.Fatalf("landing: %d %s", w.Code, w.Header().Get("Location"))
 	}
+	if dl := s.do(t, req{method: "GET", path: "/items/D-001?token=" + s.token}); dl.Code != http.StatusSeeOther || dl.Header().Get("Location") != "/items/D-001" {
+		t.Fatalf("deep landing: %d %s", dl.Code, dl.Header().Get("Location"))
+	}
 	ck := w.Result().Cookies()
 	if len(ck) != 1 || !ck[0].HttpOnly || ck[0].SameSite != http.SameSiteStrictMode {
 		t.Fatalf("cookie: %+v", ck)
 	}
-	page := s.do(t, req{method: "GET", path: "/", cookie: true}).Body.String()
-	if !strings.Contains(page, "/static/app.js?v="+assetVersion) || !strings.Contains(page, s.token) {
-		t.Fatalf("page does not version its assets or carry the token:\n%s", page)
+	pw := s.do(t, req{method: "GET", path: "/", cookie: true})
+	page := pw.Body.String()
+	if !strings.Contains(page, s.token) || !strings.Contains(page, "/assets/") || strings.Contains(page, "{{") {
+		t.Fatalf("page does not carry the token and the built assets:\n%s", page)
 	}
-	if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "unsafe-inline") {
+	pcsp := pw.Header().Get("Content-Security-Policy")
+	nonce := strings.SplitN(strings.SplitN(page, `name="taskroll-nonce" content="`, 2)[1], `"`, 2)[0]
+	if !strings.Contains(pcsp, "script-src 'self';") || strings.Contains(pcsp, "unsafe-inline") || !strings.Contains(pcsp, "'nonce-"+nonce+"'") {
+		t.Fatalf("page csp %q does not admit only its own nonce %q", pcsp, nonce)
+	}
+	if again := s.do(t, req{method: "GET", path: "/", cookie: true}).Body.String(); strings.Contains(again, nonce) {
+		t.Fatal("the nonce is reused across pages")
+	}
+	// An item's own URL is the same application, so a deep link opens it.
+	if w := s.do(t, req{method: "GET", path: "/items/D-001", cookie: true}); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "/assets/") {
+		t.Fatalf("deep link: %d", w.Code)
+	}
+	if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "unsafe-inline") || strings.Contains(csp, "nonce") {
 		t.Fatalf("csp: %s", csp)
 	}
 }
