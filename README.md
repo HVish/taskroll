@@ -2,6 +2,20 @@
 
 A work tracker kept in git. Epics, tasks and entries are JSONL records in the repository; the markdown people read is generated from them; every change goes through the CLI, which validates it, stamps who made it and when, and regenerates the views under a lock. It is built for a team of people and AI agents working in one repository, often in parallel branches and worktrees.
 
+## Try it
+
+The repository carries a sample project, a fictional storefront with three epics, work in every status, dependencies, comments, a debt list and some ideas:
+
+```sh
+git clone https://github.com/hvish/taskroll && cd taskroll
+go run ./cmd/taskroll --help
+cd examples/demo
+go run ../../cmd/taskroll list --ready
+go run ../../cmd/taskroll serve      # open the printed URL
+```
+
+Changes you make there are ordinary file changes; `git checkout -- examples` puts the demo back.
+
 ## Why records, not markdown
 
 Hand-edited markdown task lists drift: two branches renumber the same task, a status changes in one file and not in the summary that copies it, and an agent rewriting a table drops a row nobody notices. taskroll keeps one source and derives everything else from it:
@@ -107,8 +121,10 @@ The Go code needs only Go. The web UI is React, Tailwind CSS and shadcn/ui under
 
 ```sh
 cd web && pnpm install && pnpm build    # or pnpm watch while you work
-cd .. && go run ./cmd/taskroll serve
+cd ../examples/demo && go run ../../cmd/taskroll serve
 ```
+
+`go test ./...` includes an end-to-end suite (`e2e/`) that builds the binary and drives it against a copy of the demo: the commands, a merge of two branches through the merge driver, and the web server with its security checks. A change that alters the generated files must regenerate the demo (`taskroll index` in `examples/demo`), or the suite fails.
 
 ## Releases
 
