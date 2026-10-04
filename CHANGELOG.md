@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.1.1 (2026-10-04)
+
+Format 1, record schema 1. Install it on every machine before a release with format 2 exists: only binaries from this release on can tell you to upgrade.
 
 - Trackers name their format: `taskroll.json` takes `"format"` (absent means 1, and `init` writes it), and `taskroll version` prints the newest format and record schema the binary supports.
 - An older binary that meets a newer format or record schema stops before parsing and prints the command that upgrades it, instead of failing on an unknown key. Any other unknown key in the settings, the config or the records now suggests an upgrade too.
