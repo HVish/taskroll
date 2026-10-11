@@ -187,12 +187,14 @@ func TestDemoIsCurrent(t *testing.T) {
 func TestFromScratch(t *testing.T) {
 	r := newRepo(t)
 	want(t, r.tr("init"), "wrote .taskroll.json")
-	// A new tracker sets no minor setting, so it stays format 1, which
-	// every release reads.
+	// init writes every setting, so the knobs are in front of whoever
+	// starts the tracker, at the newest format.
 	settings, err := os.ReadFile(filepath.Join(r.dir, "docs", "tasks", taskroll.SettingsFile))
-	if err != nil || !strings.Contains(string(settings), `"format": 1,`) {
-		t.Fatalf("init wrote %s %v", settings, err)
+	if err != nil {
+		t.Fatal(err)
 	}
+	want(t, string(settings), `"format": "`+taskroll.CurrentFormat.String()+`",`, `"fiscal_year_start": 1,`, `"close_titles": false`, `"collections": []`)
+	want(t, r.tr("upgrade"), "already format "+taskroll.CurrentFormat.String())
 	want(t, r.tr("whoami"), "Tester")
 	r.tr("epic", "new", "--slug", "payments", "--title", "Payments", "--intro", "Checkout and refunds.")
 	want(t, r.tr("epic", "list"), "epic-0-payments")
@@ -429,10 +431,11 @@ func TestDemoServe(t *testing.T) {
 }
 
 // A tracker on a newer minor format carries settings this build does not
-// know. Reading it ignores them, which is safe only while no command
-// rewrites taskroll.json, so every command that writes runs here and the
-// file must come out byte for byte as it went in. A new command that writes
-// belongs in this list.
+// know. Reading it ignores them, which is safe only while nothing that could
+// drop them rewrites taskroll.json, so every command that writes runs here
+// and the file must come out byte for byte as it went in; upgrade, the one
+// command that writes it, must refuse. A new command that writes belongs in
+// this list.
 func TestNewerMinorSettingsSurviveEveryWrite(t *testing.T) {
 	r := demoRepo(t)
 	path := filepath.Join(r.dir, "docs", "tasks", taskroll.SettingsFile)
@@ -467,6 +470,12 @@ func TestNewerMinorSettingsSurviveEveryWrite(t *testing.T) {
 			t.Fatalf("%v rewrote %s:\n%s", args, taskroll.SettingsFile, got)
 		}
 	}
+	// upgrade is the one command that writes the settings file, and it
+	// does not move a tracker newer than the build.
+	want(t, r.fails("upgrade"), "newer than this build")
+	if got, _ := os.ReadFile(path); string(got) != settings {
+		t.Fatalf("a refused upgrade rewrote %s:\n%s", taskroll.SettingsFile, got)
+	}
 	// init beside an existing tracker directory keeps its settings.
 	if err := os.Remove(filepath.Join(r.dir, taskroll.ConfigFile)); err != nil {
 		t.Fatal(err)
@@ -474,5 +483,26 @@ func TestNewerMinorSettingsSurviveEveryWrite(t *testing.T) {
 	r.tr("init")
 	if got, _ := os.ReadFile(path); string(got) != settings {
 		t.Fatalf("init rewrote %s:\n%s", taskroll.SettingsFile, got)
+	}
+}
+
+// upgrade moves the demo, which is format 1.0, to the newest format: the
+// format line is the whole diff, the views stay current, and config show
+// then offers the settings the new format adds.
+func TestUpgradeDemo(t *testing.T) {
+	r := demoRepo(t)
+	want(t, r.tr("config", "show"), "fiscal_year_start  default 1  (setting it needs format 1.1")
+	want(t, r.tr("upgrade", "--dry-run"), "would be format 1.0 → "+taskroll.CurrentFormat.String(), "fiscal_year_start")
+	if diff := r.git("status", "--porcelain"); diff != "" {
+		t.Fatalf("a dry run changed files:\n%s", diff)
+	}
+	want(t, r.tr("upgrade"), "format 1.0 → "+taskroll.CurrentFormat.String(), "v0.1.2 and later", "git commit -m")
+	if stat := r.git("diff", "--numstat"); stat != "1\t0\tdocs/tasks/taskroll.json\n" {
+		t.Fatalf("the upgrade changed more than one line:\n%s\n%s", stat, r.git("diff"))
+	}
+	want(t, r.git("diff"), `+  "format": "`+taskroll.CurrentFormat.String()+`",`)
+	want(t, r.tr("index", "--check"), "up to date")
+	if strings.Contains(r.tr("config", "show"), "needs format") {
+		t.Fatal("config show still says a setting needs a newer format")
 	}
 }

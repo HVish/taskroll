@@ -53,6 +53,8 @@ taskroll show PAY-002
 taskroll velocity --weeks 8
 taskroll burndown --group-by week --period quarter   # also month, fy, last-quarter, --since/--until
 taskroll index --check                       # the CI gate
+taskroll config show                         # every setting, set or default
+taskroll upgrade --dry-run                   # move the tracker to the newest format
 ```
 
 ## What is in the tracker directory
@@ -69,7 +71,7 @@ A record is one JSON object per line, keys in a fixed order, so a change to one 
 
 ## Settings
 
-A tracker with no `taskroll.json` gets the defaults, which `init` writes out in full. A project that sizes work by story points, tracks a quarter per task and keeps a list of ideas beside its epics would write:
+A tracker with no `taskroll.json` gets the defaults, which `init` writes out in full, every key at its default; `taskroll config show` lists each setting in effect and whether the file sets it. A project that sizes work by story points, tracks a quarter per task and keeps a list of ideas beside its epics would write:
 
 ```json
 {
@@ -149,7 +151,7 @@ Install taskroll once per machine and upgrade it whenever you like: a newer rele
 - **A major is anything an older binary could get wrong**: how the views render, what an existing setting means, a new record schema. A new record schema always comes with a new major, so the format alone tells an older binary to stop.
 - **A minor only adds optional settings** that change no generated file and whose absence keeps the old behaviour. A file that uses one declares that minor, and taskroll refuses the setting under an older one.
 - **Newer releases keep older output.** A release renders every major it supports exactly as that major always rendered, so after an upgrade `taskroll index --check` still passes and the next write changes only what it was asked to. A frozen fixture per major (`testdata/format-N/`) holds every release to this.
-- **Moving to a newer format is a deliberate step**, made in its own commit, never a side effect of a write. No command rewrites `taskroll.json`; a test runs every writing command against a newer-minor file to hold them to it.
+- **Moving to a newer format is a deliberate step**: `taskroll upgrade` changes the format in `taskroll.json` and nothing else, lists the settings the new format adds instead of writing them, and says which releases can read the result. Commit that one line on its own once everyone runs such a release. Upgrading taskroll never moves a tracker by itself, and `upgrade` is the only command that writes `taskroll.json`; a test runs every writing command against a newer-minor file to hold them to it.
 - **Older releases degrade or stop cleanly.** A binary that meets a newer minor of its major reads the tracker, ignores the settings it does not know and warns once a run, so a teammate who has not upgraded loses only the new feature. One that meets a newer major or record schema stops before touching anything. Both print the command that upgrades it. Releases before minors existed (v0.1.0 and v0.1.1) read only a whole-number format, so upgrade every machine before a tracker declares a minor.
 
 ## License

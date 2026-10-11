@@ -21,11 +21,13 @@ import (
 // a deliberate step, never a side effect of a write.
 //
 // The minor covers optional settings keys that change no generated file and
-// whose absence keeps the behaviour before them (settingsKeySince). A build
+// whose absence keeps the behaviour before them (minorSettings). A build
 // reads a tracker with a newer minor of its own major, ignores the keys it
 // does not know, and warns: its output is the same, it only lacks the
-// feature. That is safe because no command rewrites taskroll.json, which
-// TestNewerMinorSettingsSurviveEveryWrite holds every command to.
+// feature. That is safe because the only command that writes taskroll.json
+// is upgrade, which changes the format alone and refuses a tracker newer than
+// its build; TestNewerMinorSettingsSurviveEveryWrite holds every command to
+// it.
 const (
 	FormatMajor = 1
 	FormatMinor = 1
@@ -39,12 +41,18 @@ const FormatVersion = FormatMajor
 // CurrentFormat is the newest format this build reads and writes.
 var CurrentFormat = Format{FormatMajor, FormatMinor}
 
-// settingsKeySince names the minor of FormatMajor that introduced each
-// optional settings key, as a dotted path such as "epic.close_titles". A
+// minorSetting is an optional settings key a minor of FormatMajor added. A
 // file that sets one must declare at least that minor, so a build that
 // predates the key reads the file and warns instead of refusing it.
-var settingsKeySince = map[string]int{
-	"fiscal_year_start": 1,
+type minorSetting struct {
+	Path  string // dotted for a nested key, such as "epic.close_titles"
+	Minor int
+	Help  string // what it sets and its default, which upgrade lists
+}
+
+// minorSettings are the keys each minor added, oldest first.
+var minorSettings = []minorSetting{
+	{"fiscal_year_start", 1, "month the financial year opens, 1 to 12; default 1 (January)"},
 }
 
 // Format is a tracker format, MAJOR.MINOR. In taskroll.json it is a number
@@ -55,6 +63,15 @@ type Format struct {
 }
 
 func (f Format) String() string { return fmt.Sprintf("%d.%d", f.Major, f.Minor) }
+
+// MarshalJSON writes a number while the minor is 0, which every build reads,
+// and a "MAJOR.MINOR" string otherwise.
+func (f Format) MarshalJSON() ([]byte, error) {
+	if f.Minor == 0 {
+		return []byte(strconv.Itoa(f.Major)), nil
+	}
+	return json.Marshal(f.String())
+}
 
 // Less reports whether f is older than g.
 func (f Format) Less(g Format) bool {
@@ -88,6 +105,16 @@ func (f *Format) UnmarshalJSON(raw []byte) error {
 		f.Minor, _ = strconv.Atoi(m[2])
 	}
 	return nil
+}
+
+// ReadersOf says which taskroll releases can read a tracker at format f.
+func ReadersOf(f Format) string {
+	if f.Minor == 0 {
+		return fmt.Sprintf("Every release that reads format %d reads it.", f.Major)
+	}
+	// v0.1.2 was the first release to read a format with a minor.
+	return fmt.Sprintf("Readable by taskroll v0.1.2 and later; a release older than format %s reads it with a\n"+
+		"warning and ignores the settings it adds. v0.1.0 and v0.1.1 cannot read it.", f)
 }
 
 // UpgradeCommand installs the latest release.
