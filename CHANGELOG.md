@@ -3,7 +3,7 @@
 ## Unreleased
 
 - `taskroll upgrade` moves a tracker to the newest format, or `--to` one, and `--dry-run` shows what it would do. It changes the format in `taskroll.json` and nothing else, every other byte included, lists the settings the new format adds with their defaults instead of writing them, and says which releases can read the result. It refuses a downgrade and a tracker newer than its build. A tracker without `taskroll.json` gets one with every setting at its default.
-- `taskroll config show` lists every setting with the value in effect and whether `taskroll.json` sets it or the default applies, and which need a newer format; `--json` too.
+- `taskroll config show` lists every setting with the value in effect, marked `custom` where it differs from the default (so `init`'s file, which spells every default out, shows none), and which need a newer format; `--json` also says whether the file sets each key.
 - `init` writes every setting at its default, as it said it did: `browse_url`, `fiscal_year_start`, the epic's `legend`, `fields`, `markers` and `close_titles`, and `collections` were left out. A new tracker is therefore format 1.1, which v0.1.0 and v0.1.1 cannot read.
 
 ## v0.2.0 (2026-10-11)

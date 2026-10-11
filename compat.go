@@ -109,8 +109,9 @@ func (f *Format) UnmarshalJSON(raw []byte) error {
 
 // ReadersOf says which taskroll releases can read a tracker at format f.
 func ReadersOf(f Format) string {
-	if f.Minor == 0 {
-		return fmt.Sprintf("Every release that reads format %d reads it.", f.Major)
+	if f == (Format{1, 0}) {
+		// v0.1.1 was the first release to read a file naming its format.
+		return "Readable by taskroll v0.1.1 and later; v0.1.0 cannot read a file that names its format."
 	}
 	// v0.1.2 was the first release to read a format with a minor.
 	return fmt.Sprintf("Readable by taskroll v0.1.2 and later; a release older than format %s reads it with a\n"+

@@ -53,6 +53,11 @@ func UpgradeFormat(trackerDir string, to Format, dryRun bool) (*UpgradeResult, e
 	}
 	path := filepath.Join(trackerDir, SettingsFile)
 	res := &UpgradeResult{Path: path, From: Format{1, 0}, To: to}
+	// A symlinked settings file is upgraded where it lives; renaming over
+	// the link would replace it with a copy and leave the target behind.
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
 
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -127,6 +132,8 @@ func setFormat(raw []byte, f Format) ([]byte, error) {
 	}
 	open := int(dec.InputOffset())
 	empty := !dec.More()
+	at := -1 // where the format value starts and ends, once found
+	var end int
 	for dec.More() {
 		k, err := dec.Token()
 		if err != nil {
@@ -140,6 +147,9 @@ func setFormat(raw []byte, f Format) ([]byte, error) {
 		if k != "format" {
 			continue
 		}
+		if at >= 0 {
+			return nil, errors.New(`"format" is given twice; keep one`)
+		}
 		// The value starts after the colon and any space around it, and
 		// ends where a decoder reading only it stops.
 		start := skipSpace(raw, keyEnd)
@@ -152,8 +162,10 @@ func setFormat(raw []byte, f Format) ([]byte, error) {
 		if err := one.Decode(&v); err != nil {
 			return nil, err
 		}
-		end := start + int(one.InputOffset())
-		return concat(raw[:start], val, raw[end:]), nil
+		at, end = start, start+int(one.InputOffset())
+	}
+	if at >= 0 {
+		return concat(raw[:at], val, raw[end:]), nil
 	}
 	if empty {
 		return concat(raw[:open], []byte(`"format": `), val, raw[open:]), nil

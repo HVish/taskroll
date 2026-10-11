@@ -627,9 +627,11 @@ func configShowCmd() *cobra.Command {
 			}
 			o.printf("%s, format %s\n\n", filepath.Join(dir, taskroll.SettingsFile), format)
 			for _, e := range entries {
+				// What a project changed is what differs from the default,
+				// whether or not the file spells the default out.
 				note, needs := "default", ""
-				if e.Set {
-					note = "set"
+				if !e.Default {
+					note = "custom"
 				}
 				if e.Needs != nil {
 					needs = fmt.Sprintf("  (setting it needs format %s: %s)", e.Needs, inv("upgrade"))

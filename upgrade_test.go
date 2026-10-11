@@ -30,6 +30,10 @@ func TestSetFormatChangesOnlyTheFormat(t *testing.T) {
 			t.Errorf("%q:\nhave %q %v\nwant %q", c.in, got, err, c.want)
 		}
 	}
+	// Go reads the last of two keys; changing the first would change nothing.
+	if _, err := setFormat([]byte(`{"format": 1, "format": 1}`), to); err == nil || !strings.Contains(err.Error(), "twice") {
+		t.Errorf("a duplicated format: %v", err)
+	}
 	for _, bad := range []string{`[]`, `"x"`, `{"format":`} {
 		if _, err := setFormat([]byte(bad), to); err == nil {
 			t.Errorf("%q: want an error", bad)
@@ -82,6 +86,36 @@ func TestUpgradeFormat(t *testing.T) {
 	for _, to := range []Format{{1, 0}, {2, 0}, {1, FormatMinor + 1}} {
 		if _, err := UpgradeFormat(dir, to, false); err == nil || readFile(t, path) != after {
 			t.Errorf("to %s: want a refusal and the file untouched, got %v", to, err)
+		}
+	}
+}
+
+// A symlinked settings file is upgraded where it lives, and stays a link.
+func TestUpgradeFollowsASymlink(t *testing.T) {
+	real := filepath.Join(t.TempDir(), "shared-settings.json")
+	if err := os.WriteFile(real, []byte("{\n  \"banner\": \""+strings.ReplaceAll(DefaultBanner, `"`, `\"`)+"\"\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	link := filepath.Join(dir, SettingsFile)
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpgradeFormat(dir, Format{1, 1}, false); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link was replaced: %v", err)
+	}
+	if !strings.Contains(readFile(t, real), `"format": "1.1"`) {
+		t.Fatalf("the target was not upgraded:\n%s", readFile(t, real))
+	}
+}
+
+func TestReadersOf(t *testing.T) {
+	for f, want := range map[Format]string{{1, 0}: "v0.1.1 and later; v0.1.0 cannot", {1, 1}: "v0.1.2 and later"} {
+		if got := ReadersOf(f); !strings.Contains(got, want) {
+			t.Errorf("%s: %q", f, got)
 		}
 	}
 }
@@ -232,10 +266,31 @@ func TestSettingEntries(t *testing.T) {
 	if !got["browse_url"].Set || !got["epic.close_titles"].Set || got["banner"].Set || string(got["epic.close_titles"].Value) != "true" {
 		t.Errorf("set flags or values: %+v", entries)
 	}
+	if got["browse_url"].Default || got["epic.close_titles"].Default || !got["banner"].Default || !got["sizes"].Default {
+		t.Errorf("default flags: %+v", entries)
+	}
 	if fy := got["fiscal_year_start"]; fy.Set || fy.Needs == nil || *fy.Needs != (Format{1, 1}) || string(fy.Value) != "1" {
 		t.Errorf("fiscal_year_start: %+v", fy)
 	}
 	if !strings.Contains(string(got["banner"].Value), "<!--") {
 		t.Errorf("banner is HTML-escaped: %s", got["banner"].Value)
+	}
+}
+
+// init's file sets every key to its default, and config show still reports
+// each as the default, not as a project's choice.
+func TestSettingEntriesOfInitsFile(t *testing.T) {
+	raw, err := DefaultSettingsFile(CurrentFormat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _, err := SettingEntries(writeSettings(t, string(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !e.Set || !e.Default || e.Needs != nil {
+			t.Errorf("%+v", e)
+		}
 	}
 }
