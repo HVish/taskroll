@@ -79,19 +79,17 @@ func TestBurndownRefuses(t *testing.T) {
 	}
 }
 
-// A ship date of the right shape that is no calendar day passes the record
-// checks. Bucketed, it would land in year 1 and a week series would fill
-// every week since, so it is refused, naming the task.
-func TestBurndownRefusesAnImpossibleShipDate(t *testing.T) {
+// A ship date of the right shape that is no calendar day would land in year
+// 1 and a week series would fill every week since; the record is refused on
+// load, naming the line and the task, so no chart ever sees it.
+func TestBurndownNeverSeesAnImpossibleShipDate(t *testing.T) {
 	dir := t.TempDir()
 	writeData(t, dir, "epic-1-x.jsonl", epicRec+
 		`{"id":"A-001","type":"task","status":"done","title":"a","done":"2026-02-30"}`+"\n")
 	p := &Project{Dir: dir, Settings: DefaultSettings()}
-	for _, g := range []string{GroupDay, GroupWeek, GroupMonth} {
-		_, err := p.Burndown(BurndownOptions{GroupBy: g})
-		if err == nil || !strings.Contains(err.Error(), `A-001 in epic-1-x.md: done "2026-02-30" is not a calendar day`) {
-			t.Errorf("%s: want the task named, got %v", g, err)
-		}
+	_, err := p.Burndown(BurndownOptions{GroupBy: GroupWeek})
+	if err == nil || !strings.Contains(err.Error(), `epic-1-x.jsonl:2: A-001: done "2026-02-30" is not a YYYY-MM-DD calendar day`) {
+		t.Errorf("want the line and task named, got %v", err)
 	}
 }
 

@@ -114,15 +114,7 @@ func (p *Project) Burndown(o BurndownOptions) (*BurndownReport, error) {
 	if err != nil {
 		return nil, err
 	}
-	done, _ := scanCompletions(s)
-	// Records check a ship date's shape, not that the day exists. One that
-	// does not, 2026-02-30, would fall in no week, so it is refused here
-	// rather than charted somewhere wrong.
-	for _, c := range done {
-		if _, err := time.Parse(time.DateOnly, c.Date); err != nil {
-			return nil, fmt.Errorf("%s in %s: done %q is not a calendar day", c.ID, c.Epic, c.Date)
-		}
-	}
+	done, _ := scanCompletions(s) // ship dates are calendar days: Item.Validate
 	rep := &BurndownReport{Total: len(done)}
 	for _, f := range s.LiveEpics() {
 		for _, it := range f.Items {

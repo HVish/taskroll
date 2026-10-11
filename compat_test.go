@@ -226,3 +226,41 @@ func TestSettingsKeyNeedsItsFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNoDuplicateKeys(t *testing.T) {
+	for _, ok := range []string{
+		`{"a":1,"b":{"a":2},"c":[{"a":1},{"a":2}]}`,
+		`{"comments":[{"date":"2026-01-01","body":"x"},{"date":"2026-01-02","body":"y"}]}`,
+		`{"a":"\"a\":1, {\"a\":2}","b":"}{,"}`,
+		`{"a":["a","a"],"b":"a"}`,
+		`{}`, `[]`, `{"a":`,
+	} {
+		if err := noDuplicateKeys([]byte(ok)); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{
+		`{"a":1,"a":2}`,
+		`{"x":{"q":"Q3","q":"Q4"}}`,
+		`{"c":[{"date":"d","date":"e"}]}`,
+		`{"a":"}","b":{"z":1},"a":3}`,
+		`{"a\"b":1,"a\"b":2}`,
+	} {
+		if err := noDuplicateKeys([]byte(bad)); err == nil || !strings.Contains(err.Error(), "appears twice") {
+			t.Errorf("%s: want a refusal, got %v", bad, err)
+		}
+	}
+}
+
+// A doubled key in a record or the settings is refused where it is read,
+// naming the line, rather than resolved to whichever came last.
+func TestDuplicateKeysAreRefused(t *testing.T) {
+	_, err := Decode("epic-0-x.jsonl", []byte(epicRec+`{"id":"A-001","type":"task","status":"todo","status":"done","title":"x","done":"2026-01-01"}`+"\n"))
+	if err == nil || !strings.Contains(err.Error(), `epic-0-x.jsonl:2: key "status" appears twice`) {
+		t.Errorf("record: %v", err)
+	}
+	_, err = LoadSettings(writeSettings(t, `{"banner": "<!-- %s -->", "banner": "<!-- %s, again -->"}`))
+	if err == nil || !strings.Contains(err.Error(), `key "banner" appears twice`) {
+		t.Errorf("settings: %v", err)
+	}
+}

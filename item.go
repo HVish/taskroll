@@ -149,8 +149,8 @@ func (it Item) Validate() error {
 	if it.Size != "" && !sizeName.MatchString(it.Size) {
 		return fail("size %q is not a short upper-case name such as M", it.Size)
 	}
-	if it.Done != "" && !dayShape.MatchString(it.Done) {
-		return fail("done %q is not YYYY-MM-DD", it.Done)
+	if it.Done != "" && !isDay(it.Done) {
+		return fail("done %q is not a YYYY-MM-DD calendar day", it.Done)
 	}
 	if it.Done != "" && it.Status != StatusDone {
 		return fail("has a done date but status %s", it.Status)
@@ -186,14 +186,24 @@ func (it Item) Validate() error {
 		}
 	}
 	for _, c := range it.Comments {
-		if !dayShape.MatchString(c.Date) || strings.TrimSpace(c.Body) == "" {
-			return fail("a comment needs a YYYY-MM-DD date and a body")
+		if !isDay(c.Date) || strings.TrimSpace(c.Body) == "" {
+			return fail("a comment needs a YYYY-MM-DD calendar day and a body")
 		}
 	}
 	return nil
 }
 
 // HasLabel reports whether the item carries label l.
+// isDay reports whether s is a YYYY-MM-DD day that exists: the shape alone
+// lets 2026-02-30 through, which no week or month holds.
+func isDay(s string) bool {
+	if !dayShape.MatchString(s) {
+		return false
+	}
+	_, err := time.Parse(time.DateOnly, s)
+	return err == nil
+}
+
 func (it Item) HasLabel(l string) bool { return slices.Contains(it.Labels, l) }
 
 // Open reports whether the item still owes work.

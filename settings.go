@@ -134,7 +134,12 @@ func parseSettings(path string, raw []byte) (Settings, error) {
 	}
 	decode := decodeStrict
 	if peek.Format.NewerMinor() {
-		decode = json.Unmarshal
+		decode = func(raw []byte, v any) error {
+			if err := noDuplicateKeys(raw); err != nil {
+				return err
+			}
+			return json.Unmarshal(raw, v)
+		}
 	}
 	if err := decode(raw, &doc); err != nil {
 		return Settings{}, fmt.Errorf("%s: %w", path, err)
