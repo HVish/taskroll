@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Format 1.1: the first format minor.
+
+- `burndown --group-by day|week|month`: weeks are labelled by their Monday and months as `YYYY-MM`, and a week or month with nothing done still gets a row, so a stall shows.
+- `burndown --period month|quarter|fy|last-month|last-quarter|last-fy` charts one reporting window, and `--since`/`--until` any other. Within a window `CUM` and the bar count from its start, the footer gives the window's figure beside the overall one, and `LEFT` stays the whole backlog.
+- `fiscal_year_start` in `taskroll.json` (format 1.1) sets the month the financial year opens, which quarters and years count from; `--fy-start` overrides it for a run. A tracker that does not set it stays format 1.
+- `burndown` reads the tracker once instead of twice, about twice as fast on a large one.
+- Go API: `Burndown` and `RenderBurndown` take `BurndownOptions`, and `Burndown` returns a `BurndownReport`; `Period` resolves a named window.
+
 ## v0.1.2 (2026-10-11)
 
 Format 1.0, record schema 1. Install it on every machine before any tracker declares a format minor such as `"1.1"`: v0.1.0 and v0.1.1 read only a whole-number format.

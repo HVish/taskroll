@@ -40,7 +40,11 @@ type Settings struct {
 	// When set, every item has a link that lands on it, for docs to cite.
 	BrowseURL string     `json:"browse_url,omitempty"`
 	Sizes     []SizeSpec `json:"sizes,omitempty"`
-	Epic      EpicSpec   `json:"epic"`
+	// FiscalYearStart is the month, 1 to 12, the financial year opens in,
+	// which burndown's quarter and year periods count from. Zero is
+	// January. Format 1.1.
+	FiscalYearStart int      `json:"fiscal_year_start,omitempty"`
+	Epic            EpicSpec `json:"epic"`
 	// Collections are the kinds of entry kept one file per entry beside the
 	// epics, such as debt.
 	Collections []CollectionSpec `json:"collections,omitempty"`
@@ -164,6 +168,9 @@ func (s Settings) Validate() error {
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
 			return fmt.Errorf("browse_url %q is not an http(s) address of the tracker directory", s.BrowseURL)
 		}
+	}
+	if s.FiscalYearStart < 0 || s.FiscalYearStart > 12 {
+		return fmt.Errorf("fiscal_year_start %d is not a month, 1 to 12", s.FiscalYearStart)
 	}
 	seen := map[string]bool{}
 	for _, z := range s.Sizes {
