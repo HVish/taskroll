@@ -19,6 +19,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hvish/taskroll"
 )
 
 var bin string
@@ -395,4 +397,53 @@ func TestDemoServe(t *testing.T) {
 	// The web's writes are the CLI's writes: same records, views regenerated.
 	want(t, r.tr("show", "CO-005"), "in_progress", "From the board.")
 	want(t, r.tr("index", "--check"), "up to date")
+}
+
+// A tracker on a newer minor format carries settings this build does not
+// know. Reading it ignores them, which is safe only while no command
+// rewrites taskroll.json, so every command that writes runs here and the
+// file must come out byte for byte as it went in. A new command that writes
+// belongs in this list.
+func TestNewerMinorSettingsSurviveEveryWrite(t *testing.T) {
+	r := demoRepo(t)
+	path := filepath.Join(r.dir, "docs", "tasks", taskroll.SettingsFile)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer := taskroll.Format{Major: taskroll.FormatMajor, Minor: taskroll.FormatMinor + 1}
+	settings := strings.Replace(string(raw), "{\n", "{\n  \"format\": \""+newer.String()+"\",\n  \"from_the_future\": {\"kept\": true},\n", 1)
+	settings = strings.Replace(settings, `"epic": {`, `"epic": {"badge": "new", `, 1)
+	if err := os.WriteFile(path, []byte(settings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r.git("commit", "-qam", "newer minor")
+
+	want(t, r.tr("list"), "warning: taskroll.json is format "+newer.String(), taskroll.UpgradeCommand)
+	for _, args := range [][]string{
+		{"config", "merge-driver"},
+		{"epic", "new", "--slug", "later", "--title", "Later"},
+		{"add", "--epic", "epic-0-checkout", "--series", "CO", "--title", "Apple Pay", "--size", "M"},
+		{"status", "CO-005", "in_progress"},
+		{"edit", "CO-005", "--title", "Saved cards"},
+		{"comment", "CO-005", "--body", "Design is ready."},
+		{"done", "CO-005", "--on", "2026-10-01"},
+		{"new", "debt", "--title", "Cart totals computed twice", "--area", "checkout", "--size", "S", "--body", "Twice."},
+		{"fmt"},
+		{"index"},
+		{"archive"},
+	} {
+		r.tr(args...)
+		if got, _ := os.ReadFile(path); string(got) != settings {
+			t.Fatalf("%v rewrote %s:\n%s", args, taskroll.SettingsFile, got)
+		}
+	}
+	// init beside an existing tracker directory keeps its settings.
+	if err := os.Remove(filepath.Join(r.dir, taskroll.ConfigFile)); err != nil {
+		t.Fatal(err)
+	}
+	r.tr("init")
+	if got, _ := os.ReadFile(path); string(got) != settings {
+		t.Fatalf("init rewrote %s:\n%s", taskroll.SettingsFile, got)
+	}
 }

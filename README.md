@@ -136,16 +136,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): building and testing (including the web 
 
 ## Releases
 
-Tags are `vX.Y.Z`; binaries are built with `go build -ldflags "-X main.version=vX.Y.Z" ./cmd/taskroll`. [CHANGELOG.md](CHANGELOG.md) records each release. A change to the record format bumps `SchemaVersion`, the schema's `$id` and `FormatVersion`; see Compatibility below.
+Tags are `vX.Y.Z`; binaries are built with `go build -ldflags "-X main.version=vX.Y.Z" ./cmd/taskroll`. [CHANGELOG.md](CHANGELOG.md) records each release. A change to the record format bumps `SchemaVersion`, the schema's `$id` and `FormatMajor`; a new optional setting bumps `FormatMinor` and the release's minor version. See Compatibility below.
 
 ## Compatibility
 
 Install taskroll once per machine and upgrade it whenever you like: a newer release never rewrites a tracker it did not change.
 
-- **The tracker names its format.** `taskroll.json` carries `"format"` (absent means 1), and each epic record carries the record schema it was written in. `taskroll version` prints the newest of each that the binary supports. A new record schema always comes with a new format, so the format alone tells an older binary to stop.
-- **Newer releases keep older output.** A release renders every format it supports exactly as that format always rendered, so after an upgrade `taskroll index --check` still passes and the next write changes only what it was asked to. A frozen fixture per format (`testdata/format-N/`) holds every release to this.
-- **Moving to a newer format is a deliberate step**, made in its own commit, never a side effect of a write.
-- **Older releases refuse newer trackers cleanly.** A binary that meets a newer format or record schema stops before touching anything and prints the command that upgrades it, rather than failing on a key it does not know or dropping it on the next write.
+- **The tracker names its format, `MAJOR.MINOR`.** `taskroll.json` carries `"format"`: absent or `1` means 1.0, and a minor is written as a string, `"1.2"`. Each epic record carries the record schema it was written in. `taskroll version` prints the newest of each that the binary supports.
+- **A major is anything an older binary could get wrong**: how the views render, what an existing setting means, a new record schema. A new record schema always comes with a new major, so the format alone tells an older binary to stop.
+- **A minor only adds optional settings** that change no generated file and whose absence keeps the old behaviour. A file that uses one declares that minor, and taskroll refuses the setting under an older one.
+- **Newer releases keep older output.** A release renders every major it supports exactly as that major always rendered, so after an upgrade `taskroll index --check` still passes and the next write changes only what it was asked to. A frozen fixture per major (`testdata/format-N/`) holds every release to this.
+- **Moving to a newer format is a deliberate step**, made in its own commit, never a side effect of a write. No command rewrites `taskroll.json`; a test runs every writing command against a newer-minor file to hold them to it.
+- **Older releases degrade or stop cleanly.** A binary that meets a newer minor of its major reads the tracker, ignores the settings it does not know and warns once a run, so a teammate who has not upgraded loses only the new feature. One that meets a newer major or record schema stops before touching anything. Both print the command that upgrades it. Releases before minors existed (v0.1.0 and v0.1.1) read only a whole-number format, so upgrade every machine before a tracker declares a minor.
 
 ## License
 

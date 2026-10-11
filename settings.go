@@ -27,9 +27,11 @@ const SettingsFile = "taskroll.json"
 // and every view reads open and closed from it; a project-defined status
 // would mean something to none of them.
 type Settings struct {
-	// Format is the tracker format the directory is written in; see
-	// FormatVersion. Zero, a settings file without it, means 1.
-	Format int `json:"format,omitempty"`
+	// Format is the major of the tracker format the directory is written
+	// in, and FormatMinor its minor; see FormatMajor. A settings file
+	// without a format is 1.0. Version returns the two together.
+	Format      int `json:"format,omitempty"`
+	FormatMinor int `json:"-"`
 	// Banner is the line under a generated file's heading that says it is
 	// generated. %s becomes the data file's name.
 	Banner string `json:"banner,omitempty"`
@@ -82,7 +84,7 @@ const DefaultBanner = "<!-- Generated from ../data/%s. Change it with the tracke
 // S, M and L sizes, plain task lines, no collections.
 func DefaultSettings() Settings {
 	return Settings{
-		Format: FormatVersion,
+		Format: FormatMajor,
 		Banner: DefaultBanner,
 		Sizes:  []SizeSpec{{"S", 1}, {"M", 2.5}, {"L", 4.5}},
 	}
@@ -106,21 +108,35 @@ func LoadSettings(trackerDir string) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	// The format is read on its own first: a newer format may carry keys
-	// this build would refuse, and the useful answer is to upgrade.
+	// The format is read on its own first: a newer major may carry keys
+	// this build would misread, and the useful answer is to upgrade. A newer
+	// minor only adds optional keys, so it is read with them ignored.
 	var peek struct {
-		Format int `json:"format"`
+		Format Format `json:"format"`
 	}
-	if json.Unmarshal(raw, &peek) == nil && peek.Format > FormatVersion {
-		return Settings{}, &NewerError{Path: path, What: "format", Have: peek.Format, Supported: FormatVersion}
+	if json.Unmarshal(raw, &peek) == nil && peek.Format.Major > FormatMajor {
+		return Settings{}, &NewerError{Path: path, What: "format", Have: peek.Format.Major, Supported: FormatMajor}
 	}
-	var s Settings
-	if err := decodeStrict(raw, &s); err != nil {
+	// The format is decoded whole here, where it shadows Settings.Format.
+	var doc struct {
+		Settings
+		Format *Format `json:"format"`
+	}
+	decode := decodeStrict
+	if peek.Format.NewerMinor() {
+		decode = json.Unmarshal
+	}
+	if err := decode(raw, &doc); err != nil {
 		return Settings{}, fmt.Errorf("%s: %w", path, err)
 	}
+	s := doc.Settings
+	s.Format = 1
+	if doc.Format != nil {
+		s.Format, s.FormatMinor = doc.Format.Major, doc.Format.Minor
+	}
 	def := DefaultSettings()
-	if s.Format == 0 {
-		s.Format = 1
+	if err := keysNeedTheirFormat(raw, s.Version()); err != nil {
+		return Settings{}, fmt.Errorf("%s: %w", path, err)
 	}
 	if s.Banner == "" {
 		s.Banner = def.Banner
@@ -137,8 +153,8 @@ func LoadSettings(trackerDir string) (Settings, error) {
 // Validate checks the settings are coherent: names are well-formed and
 // unique, and every collection is a type the records know.
 func (s Settings) Validate() error {
-	if s.Format < 0 || s.Format > FormatVersion {
-		return fmt.Errorf("format %d is not one this build supports (1 to %d)", s.Format, FormatVersion)
+	if s.Format < 0 || s.Format > FormatMajor {
+		return fmt.Errorf("format %d is not one this build supports (1 to %d)", s.Format, FormatMajor)
 	}
 	if strings.Count(s.Banner, "%s") != 1 || strings.ContainsAny(s.Banner, "\n\r") {
 		return fmt.Errorf("banner must be one line holding %%s once, for the data file's name")
@@ -255,3 +271,46 @@ func (s Settings) Markdown() Markdown {
 // ArchivedMarker flags an epic file whose content has moved to the archive.
 // The file stays in place as a tombstone, so links to it keep working.
 const ArchivedMarker = "<!-- archived -->"
+
+// Version is the tracker format, major and minor. Zero, as in settings built
+// in code, is 1.0.
+func (s Settings) Version() Format {
+	if s.Format == 0 {
+		return Format{1, 0}
+	}
+	return Format{s.Format, s.FormatMinor}
+}
+
+// keysNeedTheirFormat refuses a settings key newer than the format the file
+// declares. Declaring it is what lets a build that predates the key read the
+// file and warn, where it would otherwise refuse the key as unknown.
+func keysNeedTheirFormat(raw []byte, f Format) error {
+	if len(settingsKeySince) == 0 {
+		return nil
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return err
+	}
+	keys := make([]string, 0, len(settingsKeySince))
+	for k := range settingsKeySince {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, key := range keys {
+		need := Format{FormatMajor, settingsKeySince[key]}
+		if hasPath(doc, strings.Split(key, ".")) && f.Less(need) {
+			return fmt.Errorf("%s needs \"format\": %q or later, so that older builds know to ignore it", key, need.String())
+		}
+	}
+	return nil
+}
+
+func hasPath(doc map[string]any, path []string) bool {
+	v, ok := doc[path[0]]
+	if !ok || len(path) == 1 {
+		return ok
+	}
+	sub, isObj := v.(map[string]any)
+	return isObj && hasPath(sub, path[1:])
+}

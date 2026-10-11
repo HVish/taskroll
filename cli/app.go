@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -119,10 +120,31 @@ func project() (*taskroll.Project, error) {
 }
 
 func openAt(dir string) (*taskroll.Project, error) {
+	open := taskroll.OpenProject
 	if hooks.Open != nil {
-		return hooks.Open(dir)
+		open = hooks.Open
 	}
-	return taskroll.OpenProject(dir)
+	p, err := open(dir)
+	if err == nil && p.Settings.Version().NewerMinor() {
+		newerMinor.Do(func() {
+			warn(os.Stderr, "%s is format %s; this build knows up to %s, so it ignores the settings added since. Upgrade with: %s",
+				taskroll.SettingsFile, p.Settings.Version(), taskroll.CurrentFormat, taskroll.UpgradeCommand)
+		})
+	}
+	return p, err
+}
+
+// newerMinor warns about a newer format once a run, however often the
+// project is opened.
+var newerMinor sync.Once
+
+// warn prints a warning line, in yellow on a terminal unless NO_COLOR is set.
+func warn(w *os.File, format string, a ...any) {
+	msg := "warning: " + fmt.Sprintf(format, a...)
+	if fi, err := w.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 && os.Getenv("NO_COLOR") == "" {
+		msg = "\033[33m" + msg + "\033[0m"
+	}
+	_, _ = fmt.Fprintln(w, msg)
 }
 
 // writable opens the project and refuses one with no records.

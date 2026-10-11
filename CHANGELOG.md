@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The tracker format is `MAJOR.MINOR`. A minor only adds optional settings that change no generated file, so a binary that meets a newer minor of its major reads the tracker, ignores the settings it does not know and warns once a run, instead of refusing it; a newer major still stops it. `"format"` stays a number while the minor is 0 (`init` still writes `1`), and a minor is a string, `"1.2"`. `taskroll version` prints the format as `1.0`.
+- A settings key added in a minor must come with that minor declared in `"format"`, so older binaries know to ignore it rather than refuse it.
+- No command rewrites `taskroll.json`; a test runs every writing command against a newer-minor file and holds it to that, since ignoring unknown settings is only safe while they cannot be dropped.
+- Go API, additive: `Format`, `CurrentFormat`, `FormatMajor`, `FormatMinor`, `Settings.FormatMinor` and `Settings.Version`. `FormatVersion` is deprecated in favour of `FormatMajor`.
+
 ## v0.1.1 (2026-10-04)
 
 Format 1, record schema 1. Install it on every machine before a release with format 2 exists: only binaries from this release on can tell you to upgrade.
