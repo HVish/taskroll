@@ -44,7 +44,7 @@ func main() {
 		Short: "Print the tracker version and the newest format and record schema it reads",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "taskroll %s (format %d, record schema %d)\n", buildVersion(), taskroll.FormatVersion, taskroll.SchemaVersion)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "taskroll %s (format %s, record schema %d)\n", buildVersion(), taskroll.CurrentFormat, taskroll.SchemaVersion)
 		},
 	})
 	if err := root.Execute(); err != nil {

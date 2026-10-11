@@ -1,6 +1,7 @@
 package taskroll
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -10,7 +11,7 @@ import (
 	"testing"
 )
 
-// The promise FormatVersion makes: a tracker written in format 1 renders
+// The promise FormatMajor makes: a tracker written in format 1 renders
 // byte for byte as format 1 always has, so upgrading taskroll leaves it
 // untouched. testdata/format-1 is frozen. Never regenerate it: a change that
 // would alter it is a new format, with its own fixture beside this one.
@@ -40,8 +41,8 @@ func TestFormat1RendersUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Settings.Format != 1 {
-		t.Fatalf("a settings file without a format is format 1, got %d", p.Settings.Format)
+	if p.Settings.Version() != (Format{1, 0}) {
+		t.Fatalf("a settings file without a format is format 1.0, got %s", p.Settings.Version())
 	}
 	// Every write re-encodes the whole file, so the records must encode
 	// back to the bytes they were read from, or the next write to a file
@@ -102,19 +103,20 @@ func TestFormat1RendersUnchanged(t *testing.T) {
 
 // The format gates the whole tracker: only epic records carry a schema, so
 // an old binary sees a newer record schema in a collection only if the format
-// in taskroll.json moved with it. Each format names the record schema it
-// writes; bumping SchemaVersion without a new format fails here.
+// in taskroll.json moved with it. Each major names the record schema it
+// writes; bumping SchemaVersion without a new major fails here (a minor only
+// adds settings, so it cannot carry a record change).
 func TestEachRecordSchemaHasItsOwnFormat(t *testing.T) {
 	schemaOf := map[int]int{1: 1}
-	if schemaOf[FormatVersion] != SchemaVersion {
-		t.Fatalf("format %d writes record schema %d, but SchemaVersion is %d: a new record schema is a new format", FormatVersion, schemaOf[FormatVersion], SchemaVersion)
+	if schemaOf[FormatMajor] != SchemaVersion {
+		t.Fatalf("format %d writes record schema %d, but SchemaVersion is %d: a new record schema is a new format", FormatMajor, schemaOf[FormatMajor], SchemaVersion)
 	}
-	for f := 2; f <= FormatVersion; f++ {
+	for f := 2; f <= FormatMajor; f++ {
 		if schemaOf[f] < schemaOf[f-1] {
 			t.Fatalf("format %d writes record schema %d, older than format %d's", f, schemaOf[f], f-1)
 		}
 	}
-	for f := 1; f <= FormatVersion; f++ {
+	for f := 1; f <= FormatMajor; f++ {
 		if _, err := os.Stat(filepath.Join("testdata", fmt.Sprintf("format-%d", f), SettingsFile)); err != nil {
 			t.Errorf("format %d has no frozen fixture: %v", f, err)
 		}
@@ -149,5 +151,70 @@ func TestUnknownKeySuggestsAnUpgrade(t *testing.T) {
 	_, err := Decode("epic-0-x.jsonl", []byte(`{"id":"epic-0-x","type":"epic","schema":1,"title":"X","owner":"someone"}`+"\n"))
 	if err == nil || !strings.Contains(err.Error(), `unknown field "owner"`) || !strings.Contains(err.Error(), UpgradeCommand) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestFormatJSON(t *testing.T) {
+	for in, want := range map[string]Format{`1`: {1, 0}, `"1"`: {1, 0}, `"1.0"`: {1, 0}, `"1.2"`: {1, 2}, `"2.10"`: {2, 10}} {
+		var f Format
+		if err := json.Unmarshal([]byte(in), &f); err != nil || f != want {
+			t.Errorf("%s: have %v %v, want %v", in, f, err, want)
+		}
+	}
+	// A bare 1.10 is the number 1.1, so a minor must be quoted.
+	for _, in := range []string{`1.2`, `0`, `"0.1"`, `"1.02"`, `"+1"`, `"1.2.3"`, `"1."`, `true`, `-1`} {
+		var f Format
+		if err := json.Unmarshal([]byte(in), &f); err == nil {
+			t.Errorf("%s: want an error, got %v", in, f)
+		}
+	}
+}
+
+func writeSettings(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, SettingsFile), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// A newer minor of this build's major only adds optional settings, so the
+// file is read with the keys this build does not know ignored, wherever
+// they sit. Its own minor and older ones stay strict, so a typo is caught.
+func TestNewerMinorIsReadWithoutItsKeys(t *testing.T) {
+	newer := Format{FormatMajor, FormatMinor + 1}
+	dir := writeSettings(t, `{"format": "`+newer.String()+`", "colour": "teal", "epic": {"legend": "> L", "badge": true}}`)
+	s, err := LoadSettings(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Version() != newer || !s.Version().NewerMinor() || s.Epic.Legend != "> L" {
+		t.Fatalf("have %+v", s)
+	}
+	for _, f := range []string{`1`, `"` + CurrentFormat.String() + `"`} {
+		_, err := LoadSettings(writeSettings(t, `{"format": `+f+`, "colour": "teal"}`))
+		if err == nil || !strings.Contains(err.Error(), `unknown field "colour"`) {
+			t.Errorf("format %s: want the unknown key refused, got %v", f, err)
+		}
+	}
+}
+
+// A key registered as added in a minor must come with that minor declared.
+// close_titles stands in for such a key here; it has been in format 1.0.
+func TestSettingsKeyNeedsItsFormat(t *testing.T) {
+	settingsKeySince["epic.close_titles"] = FormatMinor + 1
+	t.Cleanup(func() { delete(settingsKeySince, "epic.close_titles") })
+	need := Format{FormatMajor, FormatMinor + 1}.String()
+	_, err := LoadSettings(writeSettings(t, `{"epic": {"close_titles": true}}`))
+	if err == nil || !strings.Contains(err.Error(), `epic.close_titles needs "format": "`+need+`"`) {
+		t.Fatalf("want the key to ask for its format, got %v", err)
+	}
+	if _, err := LoadSettings(writeSettings(t, `{"format": "`+need+`", "epic": {"close_titles": true}}`)); err != nil {
+		t.Fatal(err)
+	}
+	// A file without the key needs no particular format.
+	if _, err := LoadSettings(writeSettings(t, `{"epic": {"legend": "> L"}}`)); err != nil {
+		t.Fatal(err)
 	}
 }

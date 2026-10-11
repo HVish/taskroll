@@ -19,7 +19,7 @@ import (
 // higher version refuses the file rather than guessing at fields it does not
 // know, because a silently dropped field is lost on the next write.
 // Collection records carry no schema, so a new schema is always a new
-// FormatVersion as well.
+// FormatMajor as well.
 const SchemaVersion = 1
 
 // Item types.
