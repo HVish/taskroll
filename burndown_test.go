@@ -79,6 +79,22 @@ func TestBurndownRefuses(t *testing.T) {
 	}
 }
 
+// A ship date of the right shape that is no calendar day passes the record
+// checks. Bucketed, it would land in year 1 and a week series would fill
+// every week since, so it is refused, naming the task.
+func TestBurndownRefusesAnImpossibleShipDate(t *testing.T) {
+	dir := t.TempDir()
+	writeData(t, dir, "epic-1-x.jsonl", epicRec+
+		`{"id":"A-001","type":"task","status":"done","title":"a","done":"2026-02-30"}`+"\n")
+	p := &Project{Dir: dir, Settings: DefaultSettings()}
+	for _, g := range []string{GroupDay, GroupWeek, GroupMonth} {
+		_, err := p.Burndown(BurndownOptions{GroupBy: g})
+		if err == nil || !strings.Contains(err.Error(), `A-001 in epic-1-x.md: done "2026-02-30" is not a calendar day`) {
+			t.Errorf("%s: want the task named, got %v", g, err)
+		}
+	}
+}
+
 func TestRenderBurndownWindow(t *testing.T) {
 	p := burndownProject(t)
 	s, err := p.RenderBurndown(BurndownOptions{GroupBy: GroupMonth, From: "2026-07-01", To: "2026-07-31"})

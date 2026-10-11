@@ -464,6 +464,9 @@ func burndownCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if period == "" && cmd.Flags().Changed("fy-start") {
+				return errors.New("--fy-start sets where --period's quarters and years begin; give a --period")
+			}
 			if period != "" {
 				if o.From != "" || o.To != "" {
 					return errors.New("give --period or --since/--until, not both")

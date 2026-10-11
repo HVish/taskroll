@@ -256,6 +256,7 @@ func TestDemoReads(t *testing.T) {
 		"MONTH", "2026-09          6      6     10", "6 completed from 2026-09-01 to 2026-09-30, of 16 open when it began (37%)")
 	want(t, r.tr("burndown", "--group-by", "week", "--until", "2026-09-06"), "WEEK OF", "2026-08-31       1      3     15")
 	want(t, r.fails("burndown", "--period", "quarter", "--since", "2026-01-01"), "not both")
+	want(t, r.fails("burndown", "--fy-start", "4", "--since", "2026-01-01"), "give a --period")
 
 	// The financial year in taskroll.json sets the periods; --fy-start
 	// overrides it for a run.

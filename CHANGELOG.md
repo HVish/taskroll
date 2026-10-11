@@ -8,6 +8,7 @@ Format 1.1: the first format minor.
 - `burndown --period month|quarter|fy|last-month|last-quarter|last-fy` charts one reporting window, and `--since`/`--until` any other. Within a window `CUM` and the bar count from its start, the footer gives the window's figure beside the overall one, and `LEFT` stays the whole backlog.
 - `fiscal_year_start` in `taskroll.json` (format 1.1) sets the month the financial year opens, which quarters and years count from; `--fy-start` overrides it for a run. A tracker that does not set it stays format 1.
 - `burndown` reads the tracker once instead of twice, about twice as fast on a large one.
+- `burndown` refuses a ship date of the right shape that is no calendar day (`2026-02-30`), naming the task, instead of charting it: records check only the shape, and in a week series such a date filled every week since year 1.
 - Go API: `Burndown` and `RenderBurndown` take `BurndownOptions`, and `Burndown` returns a `BurndownReport`; `Period` resolves a named window.
 
 ## v0.1.2 (2026-10-11)
