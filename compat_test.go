@@ -203,9 +203,9 @@ func TestNewerMinorIsReadWithoutItsKeys(t *testing.T) {
 // A key added in a minor must come with that minor declared, so a build
 // that predates it reads the file and warns rather than refusing the key.
 func TestSettingsKeyNeedsItsFormat(t *testing.T) {
-	for key, minor := range settingsKeySince {
-		if minor < 1 || minor > FormatMinor {
-			t.Errorf("%s: added in minor %d, which this build is not", key, minor)
+	for i, k := range minorSettings {
+		if k.Minor < 1 || k.Minor > FormatMinor || i > 0 && k.Minor < minorSettings[i-1].Minor || k.Help == "" {
+			t.Errorf("%s: added in minor %d, out of order, beyond this build, or without help", k.Path, k.Minor)
 		}
 	}
 	for _, f := range []string{``, `"format": 1, `, `"format": "1.0", `} {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -576,7 +577,7 @@ func whoamiCmd() *cobra.Command {
 func configCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Per-clone tracker settings",
+		Short: "Show the tracker's settings and set up this clone",
 		Args:  cobra.NoArgs,
 		RunE:  groupRunE,
 	}
@@ -595,7 +596,119 @@ func configCmd() *cobra.Command {
 			out{cmd.OutOrStdout()}.printf("you are %q\n", actor(dir))
 			return nil
 		},
-	}, configMergeDriverCmd())
+	}, configMergeDriverCmd(), configShowCmd())
+	return cmd
+}
+
+func configShowCmd() *cobra.Command {
+	var asJSON bool
+	cmd := &cobra.Command{
+		Use:   "show",
+		Short: "List every setting in " + taskroll.SettingsFile + ", its value, and whether it is set or the default",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			dir, err := trackerDir()
+			if err != nil {
+				return err
+			}
+			if _, err := openAt(dir); err != nil { // warns about a newer format
+				return err
+			}
+			entries, format, err := taskroll.SettingEntries(dir)
+			if err != nil {
+				return err
+			}
+			o := out{cmd.OutOrStdout()}
+			if asJSON {
+				return printJSON(o, struct {
+					Format   string                  `json:"format"`
+					Settings []taskroll.SettingEntry `json:"settings"`
+				}{format.String(), entries})
+			}
+			o.printf("%s, format %s\n\n", filepath.Join(dir, taskroll.SettingsFile), format)
+			for _, e := range entries {
+				// What a project changed is what differs from the default,
+				// whether or not the file spells the default out.
+				note, needs := "default", ""
+				if !e.Default {
+					note = "custom"
+				}
+				if e.Needs != nil {
+					needs = fmt.Sprintf("  (setting it needs format %s: %s)", e.Needs, inv("upgrade"))
+				}
+				o.printf("%-18s %-7s %s%s\n", e.Key, note, e.Value, needs)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print JSON")
+	return cmd
+}
+
+func upgradeCmd() *cobra.Command {
+	var to string
+	var dryRun bool
+	cmd := &cobra.Command{
+		Use:   "upgrade",
+		Short: "Move the tracker to a newer format",
+		Long: "Changes the format in " + taskroll.SettingsFile + " and nothing else, so the diff is the one line\n" +
+			"that decides which taskroll releases can read the tracker. Settings the new format\n" +
+			"adds are listed, not written: set the ones you want by hand. A tracker without the\n" +
+			"file gets one with every setting at its default.\n\n" +
+			"Upgrading taskroll never does this on its own. Commit the change by itself, once\n" +
+			"everyone who works on the tracker runs a release that reads the new format.",
+		Example: "  TRACKER upgrade --dry-run\n  TRACKER upgrade\n  TRACKER upgrade --to 1.1",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			dir, err := trackerDir()
+			if err != nil {
+				return err
+			}
+			target := taskroll.CurrentFormat
+			if to != "" {
+				if err := json.Unmarshal([]byte(strconv.Quote(to)), &target); err != nil {
+					return err
+				}
+			}
+			res, err := taskroll.UpgradeFormat(dir, target, dryRun)
+			if err != nil {
+				return err
+			}
+			o := out{cmd.OutOrStdout()}
+			rel := res.Path
+			if wd, err := os.Getwd(); err == nil {
+				if r, err := filepath.Rel(wd, res.Path); err == nil {
+					rel = r
+				}
+			}
+			would := ""
+			if dryRun {
+				would = "would be "
+			}
+			switch {
+			case res.Created:
+				o.printf("%s: %swritten at format %s with every setting at its default\n", rel, would, res.To)
+			case res.From == res.To:
+				o.printf("%s is already format %s\n", rel, res.To)
+				return nil
+			default:
+				o.printf("%s: %sformat %s → %s\n", rel, would, res.From, res.To)
+			}
+			if len(res.New) > 0 {
+				o.printf("\nNew since %s, not set, so the defaults apply:\n", res.From)
+				for _, n := range res.New {
+					o.printf("  %-18s %s\n", n.Key, n.Help)
+				}
+			}
+			o.printf("\n%s\n", taskroll.ReadersOf(res.To))
+			if !dryRun {
+				o.printf("\nCommit it on its own:\n  git commit -m \"chore: move tracker to format %s\" %s\n", res.To, rel)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&to, "to", "", "format to move to, such as 1.1; default the newest this build writes")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "say what would change and write nothing")
 	return cmd
 }
 

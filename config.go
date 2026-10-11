@@ -91,7 +91,7 @@ func Init(root string, cfg Config) (string, error) {
 	// are in front of it rather than in the documentation.
 	settings := filepath.Join(dir, SettingsFile)
 	if _, err := os.Stat(settings); os.IsNotExist(err) {
-		raw, err := marshalSettings(DefaultSettings())
+		raw, err := DefaultSettingsFile(CurrentFormat)
 		if err != nil {
 			return "", err
 		}

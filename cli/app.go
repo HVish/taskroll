@@ -46,7 +46,7 @@ func Commands(h Hooks) []*cobra.Command {
 	cmds := []*cobra.Command{
 		initCmd(), whoamiCmd(), configCmd(), fmtCmd(), listCmd(), showCmd(), statusCmd(), doneCmd(),
 		editCmd(), commentCmd(), velocityCmd(), mergeDriverCmd(), newEntryCmd(),
-		addCmd(), epicCmd(), indexCmd(), archiveCmd(), burndownCmd(), serveCmd(),
+		addCmd(), epicCmd(), indexCmd(), archiveCmd(), burndownCmd(), serveCmd(), upgradeCmd(),
 	}
 	for _, c := range cmds {
 		invocationIn(c)

@@ -1,6 +1,7 @@
 package taskroll
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -112,6 +113,11 @@ func LoadSettings(trackerDir string) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
+	return parseSettings(path, raw)
+}
+
+// parseSettings reads the settings file at path from raw.
+func parseSettings(path string, raw []byte) (Settings, error) {
 	// The format is read on its own first: a newer major may carry keys
 	// this build would misread, and the useful answer is to upgrade. A newer
 	// minor only adds optional keys, so it is read with them ignored.
@@ -292,22 +298,17 @@ func (s Settings) Version() Format {
 // declares. Declaring it is what lets a build that predates the key read the
 // file and warn, where it would otherwise refuse the key as unknown.
 func keysNeedTheirFormat(raw []byte, f Format) error {
-	if len(settingsKeySince) == 0 {
+	if len(minorSettings) == 0 {
 		return nil
 	}
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return err
 	}
-	keys := make([]string, 0, len(settingsKeySince))
-	for k := range settingsKeySince {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	for _, key := range keys {
-		need := Format{FormatMajor, settingsKeySince[key]}
-		if hasPath(doc, strings.Split(key, ".")) && f.Less(need) {
-			return fmt.Errorf("%s needs \"format\": %q or later, so that older builds know to ignore it", key, need.String())
+	for _, k := range minorSettings {
+		need := Format{FormatMajor, k.Minor}
+		if hasPath(doc, strings.Split(k.Path, ".")) && f.Less(need) {
+			return fmt.Errorf("%s needs \"format\": %q or later, so that older builds know to ignore it", k.Path, need.String())
 		}
 	}
 	return nil
@@ -320,4 +321,176 @@ func hasPath(doc map[string]any, path []string) bool {
 	}
 	sub, isObj := v.(map[string]any)
 	return isObj && hasPath(sub, path[1:])
+}
+
+// settingsFile is the settings file with every key present, in file order:
+// what init writes, so the knobs a project can turn are in front of it, and
+// what config show lists. TestSettingsFileHasEveryKey keeps it in step with
+// Settings.
+type settingsFile struct {
+	Format          Format           `json:"format"`
+	Banner          string           `json:"banner"`
+	BrowseURL       string           `json:"browse_url"`
+	Sizes           []SizeSpec       `json:"sizes"`
+	FiscalYearStart *int             `json:"fiscal_year_start,omitempty"`
+	Epic            epicSettingsFile `json:"epic"`
+	Collections     []CollectionSpec `json:"collections"`
+}
+
+type epicSettingsFile struct {
+	Legend      string       `json:"legend"`
+	Fields      []FieldSpec  `json:"fields"`
+	Markers     []MarkerSpec `json:"markers"`
+	CloseTitles bool         `json:"close_titles"`
+}
+
+// fullSettings spells out s at format f. A key newer than f is left out,
+// since a file at f may not set it; zero values become their defaults.
+func fullSettings(s Settings, f Format) settingsFile {
+	out := settingsFile{
+		Format: f, Banner: s.Banner, BrowseURL: s.BrowseURL, Sizes: s.Sizes,
+		Epic:        epicSettingsFile{Legend: s.Epic.Legend, Fields: s.Epic.Fields, Markers: s.Epic.Markers, CloseTitles: s.Epic.CloseTitles},
+		Collections: s.Collections,
+	}
+	if f.Minor >= 1 {
+		fy := max(s.FiscalYearStart, 1)
+		out.FiscalYearStart = &fy
+	}
+	// Empty lists are written as [] rather than null, as a person would.
+	if out.Sizes == nil {
+		out.Sizes = []SizeSpec{}
+	}
+	if out.Epic.Fields == nil {
+		out.Epic.Fields = []FieldSpec{}
+	}
+	if out.Epic.Markers == nil {
+		out.Epic.Markers = []MarkerSpec{}
+	}
+	if out.Collections == nil {
+		out.Collections = []CollectionSpec{}
+	}
+	return out
+}
+
+// DefaultSettingsFile is a settings file at format f with every key this
+// build knows at that format, each at its default.
+func DefaultSettingsFile(f Format) ([]byte, error) {
+	return marshalSettings(fullSettings(DefaultSettings(), f))
+}
+
+// SettingEntry is one setting as it applies to a tracker.
+type SettingEntry struct {
+	Key   string          `json:"key"` // dotted for a nested key, such as "epic.legend"
+	Value json.RawMessage `json:"value"`
+	// Set is whether the settings file gives the value, and Default
+	// whether the value is the default, so init's file, which sets every
+	// key to its default, still shows what a project changed.
+	Set     bool `json:"set"`
+	Default bool `json:"default"`
+	// Needs is the format a file must declare to set the key, when the
+	// tracker's is older.
+	Needs *Format `json:"needs,omitempty"`
+}
+
+// SettingEntries lists every setting this build knows, in file order, with
+// the value in effect for the tracker in trackerDir, and its format.
+func SettingEntries(trackerDir string) ([]SettingEntry, Format, error) {
+	s, err := LoadSettings(trackerDir)
+	if err != nil {
+		return nil, Format{}, err
+	}
+	var doc map[string]any
+	raw, err := os.ReadFile(filepath.Join(trackerDir, SettingsFile))
+	if err == nil {
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			return nil, Format{}, err
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, Format{}, err
+	}
+	have := s.Version()
+	top, err := flatSettings(fullSettings(s, CurrentFormat))
+	if err != nil {
+		return nil, Format{}, err
+	}
+	def, err := flatSettings(fullSettings(DefaultSettings(), CurrentFormat))
+	if err != nil {
+		return nil, Format{}, err
+	}
+	defaults := map[string]string{}
+	for _, kv := range def {
+		defaults[kv.Key] = string(kv.Value)
+	}
+	var out []SettingEntry
+	for _, kv := range top {
+		e := SettingEntry{Key: kv.Key, Value: kv.Value, Set: hasPath(doc, strings.Split(kv.Key, ".")), Default: defaults[kv.Key] == string(kv.Value)}
+		for _, k := range minorSettings {
+			if k.Path == kv.Key && have.Less(Format{FormatMajor, k.Minor}) {
+				e.Needs = &Format{FormatMajor, k.Minor}
+			}
+		}
+		out = append(out, e)
+	}
+	return out, have, nil
+}
+
+// flatSettings lists a settings file's keys in file order, the epic's as
+// "epic.<key>", leaving out the format.
+func flatSettings(f settingsFile) (orderedObject, error) {
+	// Not escaped for HTML: a banner is an HTML comment, shown as written.
+	var full bytes.Buffer
+	enc := json.NewEncoder(&full)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(f); err != nil {
+		return nil, err
+	}
+	var top, out orderedObject
+	if err := json.Unmarshal(full.Bytes(), &top); err != nil {
+		return nil, err
+	}
+	for _, kv := range top {
+		switch kv.Key {
+		case "format":
+		case "epic":
+			var epic orderedObject
+			if err := json.Unmarshal(kv.Value, &epic); err != nil {
+				return nil, err
+			}
+			for _, e := range epic {
+				e.Key = "epic." + e.Key
+				out = append(out, e)
+			}
+		default:
+			out = append(out, kv)
+		}
+	}
+	return out, nil
+}
+
+// orderedObject is a JSON object's members in the order they are written.
+type orderedObject []struct {
+	Key   string
+	Value json.RawMessage
+}
+
+func (o *orderedObject) UnmarshalJSON(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return fmt.Errorf("not a JSON object")
+	}
+	for dec.More() {
+		k, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return err
+		}
+		*o = append(*o, struct {
+			Key   string
+			Value json.RawMessage
+		}{k.(string), v})
+	}
+	return nil
 }
