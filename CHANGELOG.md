@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.3.1 (2026-10-11)
+
+Format 1.1, record schema 1. Upgrade every machine: an older release still lets `done --on` write a date that is no calendar day, and once one is committed this release refuses the tracker until that line is fixed by hand.
 
 - Dates must be days that exist. A ship date, a comment date or an archive record's `archived_on` of the right shape but no calendar day (`2026-02-30`) was accepted, from a hand edit and from `done --on` alike, and later charted wrong; it is now refused when written and when read, naming the file and line. A tracker that already holds one stops loading until that line is fixed by hand.
 - A key given twice in one object, in a record, `taskroll.json` or `.taskroll.json`, is refused, naming the file and line. JSON readers keep the last and drop the first silently, and `fmt` or the next write to that file made the loss permanent; `index --check` saw only "not in canonical form". The check adds about 5% to loading a large tracker.
