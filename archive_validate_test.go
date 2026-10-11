@@ -63,18 +63,19 @@ func TestValidateArchiveRequiresFields(t *testing.T) {
 func TestValidateArchiveRejectsUnknownKindAndBadDate(t *testing.T) {
 	got := problemsFor(t,
 		`{"id":"A","kind":"nonsense","archived_at":"v1","archived_on":"2026-08-23","source":"s"}`,
-		`{"id":"B","kind":"debt","archived_at":"v1","archived_on":"23-08-2026","source":"s"}`)
+		`{"id":"B","kind":"debt","archived_at":"v1","archived_on":"23-08-2026","source":"s"}`,
+		`{"id":"C","kind":"debt","archived_at":"v1","archived_on":"2026-02-30","source":"s"}`)
 	var kinds, dates int
 	for _, p := range got {
 		if strings.Contains(p.Msg, "unknown kind") {
 			kinds++
 		}
-		if strings.Contains(p.Msg, "not YYYY-MM-DD") {
+		if strings.Contains(p.Msg, "not a YYYY-MM-DD calendar day") {
 			dates++
 		}
 	}
-	if kinds != 1 || dates != 1 {
-		t.Fatalf("want one kind and one date problem, got %v", got)
+	if kinds != 1 || dates != 2 {
+		t.Fatalf("want one kind and two date problems, got %v", got)
 	}
 }
 

@@ -209,6 +209,7 @@ func TestFromScratch(t *testing.T) {
 	}
 	r.tr("status", "PAY-001", "in_progress")
 	r.tr("comment", "PAY-002", "--body", "Waiting on the provider contract.")
+	want(t, r.fails("done", "PAY-001", "--on", "2026-02-30"), "not a YYYY-MM-DD calendar day")
 	r.tr("done", "PAY-001", "--on", "2026-09-01")
 	if got := ids(r.list("--ready")); !slices.Equal(got, []string{"PAY-002"}) {
 		t.Fatalf("ready after PAY-001 ships: %v", got)
@@ -504,5 +505,29 @@ func TestUpgradeDemo(t *testing.T) {
 	want(t, r.tr("index", "--check"), "up to date")
 	if strings.Contains(r.tr("config", "show"), "needs format") {
 		t.Fatal("config show still says a setting needs a newer format")
+	}
+}
+
+// A doubled key from a hand edit or a bad merge stops every command, naming
+// the line, and fmt refuses it too instead of keeping whichever came last.
+func TestDuplicateKeyIsNotResolvedSilently(t *testing.T) {
+	r := demoRepo(t)
+	path := filepath.Join(r.dir, "docs", "tasks", "data", "epic-0-checkout.jsonl")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doubled := strings.Replace(string(raw), `{"id":"CO-001","type":"task","status":"done"`, `{"id":"CO-001","type":"task","status":"todo","status":"done"`, 1)
+	if doubled == string(raw) {
+		t.Fatal("the fixture changed; CO-001 is not where the test expects")
+	}
+	if err := os.WriteFile(path, []byte(doubled), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"list"}, {"fmt"}, {"index", "--check"}} {
+		want(t, r.fails(args...), `epic-0-checkout.jsonl:2: key "status" appears twice`)
+	}
+	if got, _ := os.ReadFile(path); string(got) != doubled {
+		t.Fatal("a refused command rewrote the file")
 	}
 }

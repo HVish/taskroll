@@ -118,6 +118,64 @@ func ReadersOf(f Format) string {
 		"warning and ignores the settings it adds. v0.1.0 and v0.1.1 cannot read it.", f)
 }
 
+// noDuplicateKeys refuses an object that names a key twice, at any depth.
+// encoding/json keeps the last and drops the first without a word, so a hand
+// edit or a botched merge would otherwise lose a value silently, and the next
+// write or fmt would make the loss permanent.
+//
+// It runs on every record, so it is one pass over the bytes that compares
+// each key, as written, with the others of its object, rather than a
+// tokenizing decoder, which doubled load time. Two spellings of one key
+// ("a" and "\u0061") are not caught; nothing taskroll writes escapes a key.
+// Malformed JSON is left to the decoder, which reports it better.
+func noDuplicateKeys(raw []byte) error {
+	// One buffer holds the keys of every open object; each frame knows
+	// where its own begin, so a record costs no allocation per object.
+	type frame struct {
+		object, wantKey bool
+		from            int
+	}
+	stack := make([]frame, 0, 8)
+	keys := make([][]byte, 0, 32)
+	for i := 0; i < len(raw); i++ {
+		switch raw[i] {
+		case '{':
+			stack = append(stack, frame{object: true, wantKey: true, from: len(keys)})
+		case '[':
+			stack = append(stack, frame{from: len(keys)})
+		case '}', ']':
+			if n := len(stack); n > 0 {
+				keys = keys[:stack[n-1].from]
+				stack = stack[:n-1]
+			}
+		case ',':
+			if n := len(stack); n > 0 && stack[n-1].object {
+				stack[n-1].wantKey = true
+			}
+		case '"':
+			start := i + 1
+			for i++; i < len(raw) && raw[i] != '"'; i++ {
+				if raw[i] == '\\' {
+					i++
+				}
+			}
+			n := len(stack)
+			if n == 0 || !stack[n-1].wantKey || i >= len(raw) {
+				continue
+			}
+			key := raw[start:i]
+			for _, k := range keys[stack[n-1].from:] {
+				if bytes.Equal(k, key) {
+					return fmt.Errorf("key %q appears twice in one object; keep one", key)
+				}
+			}
+			keys = append(keys, key)
+			stack[n-1].wantKey = false
+		}
+	}
+	return nil
+}
+
 // UpgradeCommand installs the latest release.
 const UpgradeCommand = "go install github.com/hvish/taskroll/cmd/taskroll@latest"
 
@@ -141,6 +199,9 @@ func (e *NewerError) Error() string {
 // newer taskroll added, so the error says how to upgrade. The match is on
 // encoding/json's message, which TestUnknownKeySuggestsAnUpgrade pins.
 func decodeStrict(raw []byte, v any) error {
+	if err := noDuplicateKeys(raw); err != nil {
+		return err
+	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	err := dec.Decode(v)

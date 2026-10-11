@@ -23,7 +23,6 @@ func (p ArchiveProblem) String() string {
 }
 
 var (
-	isoDay       = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	quarterFile  = regexp.MustCompile(`^(\d{4})-Q([1-4])\.jsonl$`)
 	knownKinds   = map[string]bool{"debt": true, "opportunity": true, "watch": true, "epic": true}
 	requiredJSON = []string{"id", "kind", "archived_at", "archived_on", "source"}
@@ -89,13 +88,13 @@ func ValidateArchive(tasksDir string) ([]ArchiveProblem, error) {
 			if rec.Kind != "" && !knownKinds[rec.Kind] {
 				add(n, "unknown kind %q", rec.Kind)
 			}
-			if rec.ArchivedOn != "" && !isoDay.MatchString(rec.ArchivedOn) {
-				add(n, "archived_on %q is not YYYY-MM-DD", rec.ArchivedOn)
+			if rec.ArchivedOn != "" && !isDay(rec.ArchivedOn) {
+				add(n, "archived_on %q is not a YYYY-MM-DD calendar day", rec.ArchivedOn)
 			}
 
 			// A record must sit in the quarter file its date belongs to,
 			// otherwise a lookup by quarter silently misses it.
-			if fileQuarter > 0 && isoDay.MatchString(rec.ArchivedOn) {
+			if fileQuarter > 0 && isDay(rec.ArchivedOn) {
 				y := rec.ArchivedOn[:4]
 				mon, _ := strconv.Atoi(rec.ArchivedOn[5:7])
 				if q := (mon-1)/3 + 1; y != fileYear || q != fileQuarter {

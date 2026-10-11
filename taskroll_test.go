@@ -256,3 +256,19 @@ func TestVelocity(t *testing.T) {
 		t.Fatalf("cycle times %v", c)
 	}
 }
+
+// A date of the right shape that is no calendar day is refused, wherever it
+// stands: the ship date, a comment, or (archive_validate) an archive record.
+func TestDatesAreCalendarDays(t *testing.T) {
+	for _, line := range []string{
+		`{"id":"A-001","type":"task","status":"done","title":"x","done":"2026-02-30"}`,
+		`{"id":"A-001","type":"task","status":"todo","title":"x","comments":[{"date":"2026-13-01","body":"b"}]}`,
+	} {
+		if _, err := Decode("epic-1-x.jsonl", []byte(epicRec+line+"\n")); err == nil || !strings.Contains(err.Error(), "calendar day") {
+			t.Errorf("%s: %v", line, err)
+		}
+	}
+	if _, err := Decode("epic-1-x.jsonl", []byte(epicRec+`{"id":"A-001","type":"task","status":"done","title":"x","done":"2028-02-29"}`+"\n")); err != nil {
+		t.Errorf("a leap day: %v", err)
+	}
+}
