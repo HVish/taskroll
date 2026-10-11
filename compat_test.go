@@ -200,18 +200,26 @@ func TestNewerMinorIsReadWithoutItsKeys(t *testing.T) {
 	}
 }
 
-// A key registered as added in a minor must come with that minor declared.
-// close_titles stands in for such a key here; it has been in format 1.0.
+// A key added in a minor must come with that minor declared, so a build
+// that predates it reads the file and warns rather than refusing the key.
 func TestSettingsKeyNeedsItsFormat(t *testing.T) {
-	settingsKeySince["epic.close_titles"] = FormatMinor + 1
-	t.Cleanup(func() { delete(settingsKeySince, "epic.close_titles") })
-	need := Format{FormatMajor, FormatMinor + 1}.String()
-	_, err := LoadSettings(writeSettings(t, `{"epic": {"close_titles": true}}`))
-	if err == nil || !strings.Contains(err.Error(), `epic.close_titles needs "format": "`+need+`"`) {
-		t.Fatalf("want the key to ask for its format, got %v", err)
+	for key, minor := range settingsKeySince {
+		if minor < 1 || minor > FormatMinor {
+			t.Errorf("%s: added in minor %d, which this build is not", key, minor)
+		}
 	}
-	if _, err := LoadSettings(writeSettings(t, `{"format": "`+need+`", "epic": {"close_titles": true}}`)); err != nil {
-		t.Fatal(err)
+	for _, f := range []string{``, `"format": 1, `, `"format": "1.0", `} {
+		_, err := LoadSettings(writeSettings(t, `{`+f+`"fiscal_year_start": 4}`))
+		if err == nil || !strings.Contains(err.Error(), `fiscal_year_start needs "format": "1.1"`) {
+			t.Errorf("%q: want the key to ask for its format, got %v", f, err)
+		}
+	}
+	s, err := LoadSettings(writeSettings(t, `{"format": "1.1", "fiscal_year_start": 4}`))
+	if err != nil || s.FiscalYearStart != 4 || s.Version() != (Format{1, 1}) {
+		t.Fatalf("have %+v %v", s, err)
+	}
+	if _, err := LoadSettings(writeSettings(t, `{"format": "1.1", "fiscal_year_start": 13}`)); err == nil {
+		t.Error("month 13: want an error")
 	}
 	// A file without the key needs no particular format.
 	if _, err := LoadSettings(writeSettings(t, `{"epic": {"legend": "> L"}}`)); err != nil {

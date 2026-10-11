@@ -442,19 +442,44 @@ func archiveCmd() *cobra.Command {
 }
 
 func burndownCmd() *cobra.Command {
-	return &cobra.Command{
+	var o taskroll.BurndownOptions
+	var period string
+	var fyStart int
+	cmd := &cobra.Command{
 		Use:   "burndown",
 		Short: "Show completed tasks over time",
 		Long: "Reads each finished task's ship date and prints the cumulative series. Remaining\n" +
 			"counts against the backlog as it stands today, so the trend is honest but early\n" +
-			"absolute values are approximate.",
+			"absolute values are approximate.\n\n" +
+			"--period narrows the chart to a reporting window: this month, quarter or financial\n" +
+			"year, or the last one. Quarters follow the financial year, which opens in the month\n" +
+			"fiscal_year_start in " + taskroll.SettingsFile + " names (January without it), or --fy-start\n" +
+			"for one run. --since and --until give any other window.",
+		Example: "  TRACKER burndown --group-by week --period quarter\n" +
+			"  TRACKER burndown --group-by month --period last-fy --fy-start 4\n" +
+			"  TRACKER burndown --since 2026-07-01 --until 2026-08-31",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			p, err := project()
 			if err != nil {
 				return err
 			}
-			s, err := p.RenderBurndown()
+			if period == "" && cmd.Flags().Changed("fy-start") {
+				return errors.New("--fy-start sets where --period's quarters and years begin; give a --period")
+			}
+			if period != "" {
+				if o.From != "" || o.To != "" {
+					return errors.New("give --period or --since/--until, not both")
+				}
+				if !cmd.Flags().Changed("fy-start") {
+					fyStart = max(p.Settings.FiscalYearStart, 1)
+				}
+				o.From, o.To, err = taskroll.Period(period, time.Now(), time.Month(fyStart))
+				if err != nil {
+					return err
+				}
+			}
+			s, err := p.RenderBurndown(o)
 			if err != nil {
 				return err
 			}
@@ -462,4 +487,11 @@ func burndownCmd() *cobra.Command {
 			return nil
 		},
 	}
+	fl := cmd.Flags()
+	fl.StringVar(&o.GroupBy, "group-by", taskroll.GroupDay, "one row per day, week or month")
+	fl.StringVar(&period, "period", "", "only "+strings.Join(taskroll.Periods, ", "))
+	fl.IntVar(&fyStart, "fy-start", 0, "month the financial year opens in, 1 to 12 (4 for April); default fiscal_year_start, else 1")
+	fl.StringVar(&o.From, "since", "", "first day to chart, YYYY-MM-DD")
+	fl.StringVar(&o.To, "until", "", "last day to chart, YYYY-MM-DD")
+	return cmd
 }

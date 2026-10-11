@@ -28,7 +28,7 @@ import (
 // TestNewerMinorSettingsSurviveEveryWrite holds every command to.
 const (
 	FormatMajor = 1
-	FormatMinor = 0
+	FormatMinor = 1
 )
 
 // FormatVersion is the newest major format.
@@ -43,7 +43,9 @@ var CurrentFormat = Format{FormatMajor, FormatMinor}
 // optional settings key, as a dotted path such as "epic.close_titles". A
 // file that sets one must declare at least that minor, so a build that
 // predates the key reads the file and warns instead of refusing it.
-var settingsKeySince = map[string]int{}
+var settingsKeySince = map[string]int{
+	"fiscal_year_start": 1,
+}
 
 // Format is a tracker format, MAJOR.MINOR. In taskroll.json it is a number
 // while the minor is 0, which every build before minors existed reads, and a

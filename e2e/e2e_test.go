@@ -187,6 +187,12 @@ func TestDemoIsCurrent(t *testing.T) {
 func TestFromScratch(t *testing.T) {
 	r := newRepo(t)
 	want(t, r.tr("init"), "wrote .taskroll.json")
+	// A new tracker sets no minor setting, so it stays format 1, which
+	// every release reads.
+	settings, err := os.ReadFile(filepath.Join(r.dir, "docs", "tasks", taskroll.SettingsFile))
+	if err != nil || !strings.Contains(string(settings), `"format": 1,`) {
+		t.Fatalf("init wrote %s %v", settings, err)
+	}
 	want(t, r.tr("whoami"), "Tester")
 	r.tr("epic", "new", "--slug", "payments", "--title", "Payments", "--intro", "Checkout and refunds.")
 	want(t, r.tr("epic", "list"), "epic-0-payments")
@@ -246,6 +252,29 @@ func TestDemoReads(t *testing.T) {
 	want(t, r.tr("list", "--type", "opportunity"), "gift-cards")
 	want(t, r.tr("velocity", "--weeks", "8"), "cycle time: median")
 	want(t, r.tr("burndown"), "8 of 18 complete")
+	want(t, r.tr("burndown", "--group-by", "month", "--since", "2026-09-01", "--until", "2026-09-30"),
+		"MONTH", "2026-09          6      6     10", "6 completed from 2026-09-01 to 2026-09-30, of 16 open when it began (37%)")
+	want(t, r.tr("burndown", "--group-by", "week", "--until", "2026-09-06"), "WEEK OF", "2026-08-31       1      3     15")
+	want(t, r.fails("burndown", "--period", "quarter", "--since", "2026-01-01"), "not both")
+	want(t, r.fails("burndown", "--fy-start", "4", "--since", "2026-01-01"), "give a --period")
+
+	// The financial year in taskroll.json sets the periods; --fy-start
+	// overrides it for a run.
+	path := filepath.Join(r.dir, "docs", "tasks", taskroll.SettingsFile)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(string(raw), "{\n", "{\n  \"format\": \"1.1\",\n  \"fiscal_year_start\": 4,\n", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for fy, args := range map[time.Month][]string{4: {"--period", "last-fy"}, 1: {"--period", "last-fy", "--fy-start", "1"}} {
+		from, to, err := taskroll.Period("last-fy", time.Now(), fy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want(t, r.tr(append([]string{"burndown"}, args...)...), "from "+from+" to "+to)
+	}
 
 	// With browse_url set, every item has a link that lands on it.
 	base := "https://github.com/hvish/taskroll/blob/main/examples/demo/docs/tasks"

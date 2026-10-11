@@ -51,6 +51,7 @@ taskroll comment PAY-002 --body 'Waiting on the PSP contract.'
 taskroll list --ready --json                 # every read command takes --json
 taskroll show PAY-002
 taskroll velocity --weeks 8
+taskroll burndown --group-by week --period quarter   # also month, fy, last-quarter, --since/--until
 taskroll index --check                       # the CI gate
 ```
 
@@ -86,6 +87,8 @@ A tracker with no `taskroll.json` gets the defaults, which `init` writes out in 
   ]
 }
 ```
+
+A financial year that does not open in January is set with `"fiscal_year_start": 4` (April), which `burndown --period quarter` and `--period fy` count from. It arrived in format 1.1, so a file that sets it declares `"format": "1.1"`; releases before v0.2.0 cannot read it.
 
 Each epic field becomes a flag (`--quarter Q3`) and each marker a switch (`--urgent`) on `add` and `edit`; each collection is filed with `taskroll new <type>` and its fields become flags too. A collection with a `series` numbers its entries (`TD-001`); one without names them by a slug from the title. The workflow is fixed (`todo`, `in_progress`, `in_review`, `done`, `dropped`): merging, velocity and every view depend on what the statuses mean.
 
