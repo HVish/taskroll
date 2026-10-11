@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.1.2 (2026-10-11)
 
+Format 1.0, record schema 1. Install it on every machine before any tracker declares a format minor such as `"1.1"`: v0.1.0 and v0.1.1 read only a whole-number format.
+
+- Built with Go 1.26.9, which fixes GO-2026-6603, -6607, -6608, -6609, -6611, -6612, -6613 and -6617 in the standard library's `net/http`, `crypto/tls` and `net/textproto` (reachable from `serve`).
 - The tracker format is `MAJOR.MINOR`. A minor only adds optional settings that change no generated file, so a binary that meets a newer minor of its major reads the tracker, ignores the settings it does not know and warns once a run, instead of refusing it; a newer major still stops it. `"format"` stays a number while the minor is 0 (`init` still writes `1`), and a minor is a string, `"1.2"`. `taskroll version` prints the format as `1.0`.
 - A settings key added in a minor must come with that minor declared in `"format"`, so older binaries know to ignore it rather than refuse it.
 - No command rewrites `taskroll.json`; a test runs every writing command against a newer-minor file and holds it to that, since ignoring unknown settings is only safe while they cannot be dropped.
