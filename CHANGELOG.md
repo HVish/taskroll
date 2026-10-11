@@ -4,6 +4,7 @@
 
 - Dates must be days that exist. A ship date, a comment date or an archive record's `archived_on` of the right shape but no calendar day (`2026-02-30`) was accepted, from a hand edit and from `done --on` alike, and later charted wrong; it is now refused when written and when read, naming the file and line. A tracker that already holds one stops loading until that line is fixed by hand.
 - A key given twice in one object, in a record, `taskroll.json` or `.taskroll.json`, is refused, naming the file and line. JSON readers keep the last and drop the first silently, and `fmt` or the next write to that file made the loss permanent; `index --check` saw only "not in canonical form". The check adds about 5% to loading a large tracker.
+- A record that does not read now says how to get past it: every command refuses the tracker until it reads, the one that would correct it included, so the error names the line to fix by hand and `taskroll index` to run after. Go API: such errors are a `*RecordError` (path, line and cause); the message is unchanged.
 
 ## v0.3.0 (2026-10-11)
 
