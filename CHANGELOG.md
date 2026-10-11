@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 (2026-10-11)
 
-Format 1.1: the first format minor.
+Format 1.1, record schema 1. A tracker that sets `fiscal_year_start` is format 1.1: v0.1.2 reads it with a warning, and v0.1.0 and v0.1.1 cannot read it, so upgrade every machine to v0.1.2 or later first. Trackers that do not set it stay format 1.
 
 - `burndown --group-by day|week|month`: weeks are labelled by their Monday and months as `YYYY-MM`, and a week or month with nothing done still gets a row, so a stall shows.
 - `burndown --period month|quarter|fy|last-month|last-quarter|last-fy` charts one reporting window, and `--since`/`--until` any other. Within a window `CUM` and the bar count from its start, the footer gives the window's figure beside the overall one, and `LEFT` stays the whole backlog.
