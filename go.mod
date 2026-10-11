@@ -2,7 +2,7 @@
 // generated markdown views, a CLI for people and agents.
 module github.com/hvish/taskroll
 
-go 1.26.6
+go 1.26.9
 
 require github.com/spf13/cobra v1.10.2
 
