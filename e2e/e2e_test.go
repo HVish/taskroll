@@ -524,8 +524,9 @@ func TestDuplicateKeyIsNotResolvedSilently(t *testing.T) {
 	if err := os.WriteFile(path, []byte(doubled), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, args := range [][]string{{"list"}, {"fmt"}, {"index", "--check"}} {
-		want(t, r.fails(args...), `epic-0-checkout.jsonl:2: key "status" appears twice`)
+	for _, args := range [][]string{{"list"}, {"fmt"}, {"index", "--check"}, {"done", "CO-001"}} {
+		want(t, r.fails(args...), `epic-0-checkout.jsonl:2: key "status" appears twice`,
+			"fix line 2 of", "epic-0-checkout.jsonl by hand", "taskroll index")
 	}
 	if got, _ := os.ReadFile(path); string(got) != doubled {
 		t.Fatal("a refused command rewrote the file")

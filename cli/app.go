@@ -50,8 +50,28 @@ func Commands(h Hooks) []*cobra.Command {
 	}
 	for _, c := range cmds {
 		invocationIn(c)
+		withRecordHint(c)
 	}
 	return cmds
+}
+
+// withRecordHint adds to a record that does not read how to get past it:
+// every command loads every record, so the command that would correct it
+// refuses too, and the file has to be edited by hand.
+func withRecordHint(c *cobra.Command) {
+	if run := c.RunE; run != nil {
+		c.RunE = func(cmd *cobra.Command, args []string) error {
+			err := run(cmd, args)
+			var rec *taskroll.RecordError
+			if errors.As(err, &rec) {
+				return fmt.Errorf("%w\n  every command refuses the tracker until this reads: fix line %d of %s by hand,\n  then regenerate the views with %s", err, rec.Line, rec.Path, inv("index"))
+			}
+			return err
+		}
+	}
+	for _, sub := range c.Commands() {
+		withRecordHint(sub)
+	}
 }
 
 // invocationIn writes the host's invocation into a command's help, which is

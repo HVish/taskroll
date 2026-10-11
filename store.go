@@ -116,6 +116,18 @@ func LoadFile(path string) (*File, error) {
 // ("invalid character '<'") does not say what happened.
 var conflictMarker = regexp.MustCompile(`^(<{7}|={7}|>{7}|\|{7})( |$)`)
 
+// RecordError is a record line that does not read or does not validate.
+// Every command loads every record, so none runs until the line is fixed by
+// hand; the command line says so.
+type RecordError struct {
+	Path string
+	Line int
+	Err  error
+}
+
+func (e *RecordError) Error() string { return fmt.Sprintf("%s:%d: %v", e.Path, e.Line, e.Err) }
+func (e *RecordError) Unwrap() error { return e.Err }
+
 // Decode parses the records of one file; name is used in errors only. A
 // first record of type epic makes an epic file; otherwise it is a collection.
 // Empty input decodes to an empty collection, which is what git hands a merge
@@ -145,10 +157,10 @@ func Decode(name string, raw []byte) (*File, error) {
 		}
 		var it Item
 		if err := decodeStrict(text, &it); err != nil {
-			return nil, fmt.Errorf("%s:%d: %w", name, line, err)
+			return nil, &RecordError{Path: name, Line: line, Err: err}
 		}
 		if err := it.Validate(); err != nil {
-			return nil, fmt.Errorf("%s:%d: %w", name, line, err)
+			return nil, &RecordError{Path: name, Line: line, Err: err}
 		}
 		if it.Type == TypeEpic {
 			if f.IsEpic() || len(f.Items) > 0 {
